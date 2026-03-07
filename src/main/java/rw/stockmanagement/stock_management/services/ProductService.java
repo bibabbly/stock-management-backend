@@ -1,0 +1,74 @@
+package rw.stockmanagement.stock_management.services;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import rw.stockmanagement.stock_management.dto.ProductDTO;
+import rw.stockmanagement.stock_management.models.Product;
+import rw.stockmanagement.stock_management.models.Shop;
+import rw.stockmanagement.stock_management.repositories.ProductRepository;
+import rw.stockmanagement.stock_management.repositories.ShopRepository;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class ProductService {
+
+    private final ProductRepository productRepository;
+    private final ShopRepository shopRepository;
+
+    // Get all products by shop
+    public List<Product> getAllProducts(Long shopId) {
+        return productRepository.findByShopId(shopId);
+    }
+
+    // Get single product
+    public Product getProduct(Long id) {
+        return productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+    }
+
+    // Create product
+    public Product createProduct(ProductDTO dto) {
+        Shop shop = shopRepository.findById(dto.getShopId())
+                .orElseThrow(() -> new RuntimeException("Shop not found"));
+
+        Product product = new Product();
+        product.setShop(shop);
+        product.setName(dto.getName());
+        product.setCategory(dto.getCategory());
+        product.setBarcode(dto.getBarcode());
+        product.setUnit(dto.getUnit());
+        product.setBuyingPrice(dto.getBuyingPrice());
+        product.setSellingPrice(dto.getSellingPrice());
+        product.setQuantity(dto.getQuantity());
+        product.setMinStock(dto.getMinStock());
+
+        return productRepository.save(product);
+    }
+
+    // Update product
+    public Product updateProduct(Long id, ProductDTO dto) {
+        Product product = getProduct(id);
+        product.setName(dto.getName());
+        product.setCategory(dto.getCategory());
+        product.setBarcode(dto.getBarcode());
+        product.setUnit(dto.getUnit());
+        product.setBuyingPrice(dto.getBuyingPrice());
+        product.setSellingPrice(dto.getSellingPrice());
+        product.setQuantity(dto.getQuantity());
+        product.setMinStock(dto.getMinStock());
+
+        return productRepository.save(product);
+    }
+
+    // Delete product
+    public void deleteProduct(Long id) {
+        productRepository.deleteById(id);
+    }
+
+    // Get low stock products
+    public List<Product> getLowStockProducts(Long shopId) {
+        return productRepository
+                .findByShopIdAndQuantityLessThan(shopId, 10);
+    }
+}
