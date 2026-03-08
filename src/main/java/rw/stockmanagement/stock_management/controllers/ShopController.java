@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import rw.stockmanagement.stock_management.models.Shop;
 import rw.stockmanagement.stock_management.repositories.ShopRepository;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/shops")
@@ -13,6 +14,18 @@ import rw.stockmanagement.stock_management.repositories.ShopRepository;
 public class ShopController {
 
     private final ShopRepository shopRepository;
+
+    // Get all shops
+    @GetMapping
+    public ResponseEntity<List<Shop>> getAllShops() {
+        return ResponseEntity.ok(shopRepository.findAll());
+    }
+
+    // Create shop
+    @PostMapping
+    public ResponseEntity<Shop> createShop(@RequestBody Shop shop) {
+        return ResponseEntity.ok(shopRepository.save(shop));
+    }
 
     // Get shop details
     @GetMapping("/{id}")
