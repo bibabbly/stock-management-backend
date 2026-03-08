@@ -29,6 +29,7 @@ public class SecurityConfig {
                     config.addAllowedOrigin("http://localhost:5173");
                     config.addAllowedOrigin("http://localhost");
                     config.addAllowedOrigin("http://localhost:80");
+                    config.addAllowedOrigin("https://stock-management-frontend-lake.vercel.app");
                     config.addAllowedMethod("*");
                     config.addAllowedHeader("*");
                     config.setAllowCredentials(true);
