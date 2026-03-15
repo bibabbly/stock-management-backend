@@ -29,6 +29,10 @@ public class Sale {
     @Column(name = "payment_method")
     private String paymentMethod;
 
+    @ManyToOne
+    @JoinColumn(name = "supplier_id")
+    private Supplier supplier;
+
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL)
     @JsonManagedReference
     private List<SaleItem> items;

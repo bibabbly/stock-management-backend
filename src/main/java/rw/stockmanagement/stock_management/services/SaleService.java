@@ -19,6 +19,7 @@ public class SaleService {
     private final ShopRepository shopRepository;
     private final UserRepository userRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final SupplierRepository supplierRepository;
 
     // Get all sales for a shop
     public List<Sale> getAllSales(Long shopId) {
@@ -40,13 +41,17 @@ public class SaleService {
         User user = userRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Create sale
         Sale sale = new Sale();
         sale.setShop(shop);
         sale.setUser(user);
         sale.setPaymentMethod(dto.getPaymentMethod());
 
-        // Process each item
+        // Set supplier if provided
+        if (dto.getSupplierId() != null) {
+            supplierRepository.findById(dto.getSupplierId())
+                    .ifPresent(sale::setSupplier);
+        }
+
         List<SaleItem> saleItems = new ArrayList<>();
         double totalAmount = 0.0;
 
@@ -54,7 +59,6 @@ public class SaleService {
             Product product = productRepository.findById(itemDTO.getProductId())
                     .orElseThrow(() -> new RuntimeException("Product not found"));
 
-            // Check stock availability
             if (product.getQuantity() < itemDTO.getQuantity()) {
                 throw new RuntimeException(
                         "Insufficient stock for product: " + product.getName() +
@@ -62,11 +66,9 @@ public class SaleService {
                 );
             }
 
-            // Calculate subtotal
             double subtotal = product.getSellingPrice() * itemDTO.getQuantity();
             totalAmount += subtotal;
 
-            // Create sale item
             SaleItem saleItem = new SaleItem();
             saleItem.setSale(sale);
             saleItem.setProduct(product);
@@ -75,11 +77,9 @@ public class SaleService {
             saleItem.setSubtotal(subtotal);
             saleItems.add(saleItem);
 
-            // Reduce stock
             product.setQuantity(product.getQuantity() - itemDTO.getQuantity());
             productRepository.save(product);
 
-            // Record stock movement
             StockMovement movement = new StockMovement();
             movement.setShop(shop);
             movement.setProduct(product);
