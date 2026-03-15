@@ -29,6 +29,10 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Role role;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "shop_role_id")
+    private ShopRole shopRole;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -40,4 +44,6 @@ public class User {
     public enum Role {
         ADMIN, CASHIER
     }
+
+
 }

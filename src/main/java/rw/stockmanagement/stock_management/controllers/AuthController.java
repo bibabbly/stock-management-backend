@@ -12,6 +12,8 @@ import rw.stockmanagement.stock_management.models.User;
 import rw.stockmanagement.stock_management.repositories.UserRepository;
 import rw.stockmanagement.stock_management.security.JwtUtil;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -32,8 +34,13 @@ public class AuthController {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        String token = jwtUtil.generateToken(
-                user.getEmail(), user.getRole().name());
+        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
+
+        // Get permissions from shopRole, or full access if ADMIN
+        List<String> permissions = null;
+        if (user.getShopRole() != null) {
+            permissions = user.getShopRole().getPermissions();
+        }
 
         return ResponseEntity.ok(new LoginResponse(
                 token,
@@ -41,7 +48,8 @@ public class AuthController {
                 user.getRole().name(),
                 user.getShop() != null ? user.getShop().getName() : null,
                 user.getId(),
-                user.getShop() != null ? user.getShop().getId() : null
+                user.getShop() != null ? user.getShop().getId() : null,
+                permissions
         ));
     }
 

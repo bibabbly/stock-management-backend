@@ -3,6 +3,8 @@ package rw.stockmanagement.stock_management.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 public class LoginResponse {
@@ -12,4 +14,5 @@ public class LoginResponse {
     private String shopName;
     private Long userId;
     private Long shopId;
+    private List<String> permissions;
 }
