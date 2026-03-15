@@ -15,4 +15,5 @@ public class LoginResponse {
     private Long userId;
     private Long shopId;
     private List<String> permissions;
+    private String name;
 }

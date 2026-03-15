@@ -49,7 +49,8 @@ public class AuthController {
                 user.getShop() != null ? user.getShop().getName() : null,
                 user.getId(),
                 user.getShop() != null ? user.getShop().getId() : null,
-                permissions
+                permissions,
+                user.getName()
         ));
     }
 
