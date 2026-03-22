@@ -16,29 +16,26 @@ public class StockMovementController {
 
     private final StockMovementService stockMovementService;
 
-    // Get all movements for a shop
     @GetMapping("/shop/{shopId}")
     public ResponseEntity<List<StockMovement>> getAllMovements(@PathVariable Long shopId) {
         return ResponseEntity.ok(stockMovementService.getAllMovements(shopId));
     }
 
-    // Get movements for a specific product
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<StockMovement>> getProductMovements(@PathVariable Long productId) {
         return ResponseEntity.ok(stockMovementService.getProductMovements(productId));
     }
 
-    // Get movements by type IN or OUT
     @GetMapping("/shop/{shopId}/type/{type}")
     public ResponseEntity<List<StockMovement>> getByType(@PathVariable Long shopId, @PathVariable String type) {
         return ResponseEntity.ok(stockMovementService.getMovementsByType(shopId, type));
     }
 
-    // Restock from supplier
+    // Restock — now passes userId too
     @PostMapping("/restock")
     public ResponseEntity<StockMovement> restock(@RequestBody StockMovementDTO dto) {
         return ResponseEntity.ok(stockMovementService.restockFromSupplier(
                 dto.getShopId(), dto.getProductId(), dto.getSupplierId(),
-                dto.getQuantity(), dto.getNote()));
+                dto.getQuantity(), dto.getNote(), dto.getUserId())); // ← ADD userId
     }
 }

@@ -9,4 +9,5 @@ public class StockMovementDTO {
     private Long supplierId;
     private Integer quantity;
     private String note;
+    private Long userId;
 }

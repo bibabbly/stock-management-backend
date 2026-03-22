@@ -15,6 +15,7 @@ public class StockMovementService {
     private final ProductRepository productRepository;
     private final ShopRepository shopRepository;
     private final SupplierRepository supplierRepository;
+    private final UserRepository userRepository; // ← ADD THIS
 
     // Get all movements for a shop
     public List<StockMovement> getAllMovements(Long shopId) {
@@ -34,7 +35,8 @@ public class StockMovementService {
 
     // Manually add stock IN (restock from supplier)
     @Transactional
-    public StockMovement restockFromSupplier(Long shopId, Long productId, Long supplierId, Integer quantity, String note) {
+    public StockMovement restockFromSupplier(Long shopId, Long productId, Long supplierId,
+                                             Integer quantity, String note, Long userId) { // ← ADD userId
         Shop shop = shopRepository.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
 
@@ -55,6 +57,12 @@ public class StockMovementService {
         movement.setType(StockMovement.MovementType.IN);
         movement.setQuantity(quantity);
         movement.setNote(note != null ? note : "Restock from supplier");
+
+        // ← ADD THIS: save the user who recorded the restock
+        if (userId != null) {
+            userRepository.findById(userId).ifPresent(movement::setUser);
+        }
+
         return stockMovementRepository.save(movement);
     }
 }
