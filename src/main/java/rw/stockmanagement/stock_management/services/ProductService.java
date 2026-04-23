@@ -1,6 +1,9 @@
 package rw.stockmanagement.stock_management.services;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import rw.stockmanagement.stock_management.dto.ProductDTO;
 import rw.stockmanagement.stock_management.models.Product;
@@ -16,9 +19,15 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ShopRepository shopRepository;
 
-    // Get all products by shop
-    public List<Product> getAllProducts(Long shopId) {
-        return productRepository.findByShopId(shopId);
+    // Get all products by shop — paginated + search
+    public Page<Product> getAllProducts(Long shopId, int page, int size, String search) {
+        Pageable pageable = PageRequest.of(page, size);
+        if (search != null && !search.isEmpty()) {
+            return productRepository
+                    .findByShopIdAndNameContainingIgnoreCaseOrShopIdAndCategoryContainingIgnoreCase(
+                            shopId, search, shopId, search, pageable);
+        }
+        return productRepository.findByShopId(shopId, pageable);
     }
 
     // Get single product
@@ -68,7 +77,6 @@ public class ProductService {
 
     // Get low stock products
     public List<Product> getLowStockProducts(Long shopId) {
-        return productRepository
-                .findByShopIdAndQuantityLessThan(shopId, 10);
+        return productRepository.findByShopIdAndQuantityLessThan(shopId, 10);
     }
 }
