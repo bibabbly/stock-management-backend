@@ -30,6 +30,7 @@ public class SecurityConfig {
                     config.addAllowedOrigin("http://localhost");
                     config.addAllowedOrigin("http://localhost:80");
                     config.addAllowedOrigin("https://stock-management-frontend-lake.vercel.app");
+                    config.addAllowedOrigin("https://claude.ai");
                     config.addAllowedMethod("*");
                     config.addAllowedHeader("*");
                     config.setAllowCredentials(true);
