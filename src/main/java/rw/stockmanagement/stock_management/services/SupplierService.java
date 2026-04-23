@@ -1,6 +1,9 @@
 package rw.stockmanagement.stock_management.services;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import rw.stockmanagement.stock_management.models.Supplier;
 import rw.stockmanagement.stock_management.models.Shop;
@@ -17,6 +20,14 @@ public class SupplierService {
 
     public List<Supplier> getAllSuppliers(Long shopId) {
         return supplierRepository.findByShopId(shopId);
+    }
+
+    public Page<Supplier> getAllSuppliersPaged(Long shopId, int page, int size, String search) {
+        Pageable pageable = PageRequest.of(page, size);
+        if (search != null && !search.isEmpty()) {
+            return supplierRepository.findByShopIdAndNameContainingIgnoreCaseOrderByCreatedAtDesc(shopId, search, pageable);
+        }
+        return supplierRepository.findByShopIdOrderByCreatedAtDesc(shopId, pageable);
     }
 
     public Supplier getSupplier(Long id) {

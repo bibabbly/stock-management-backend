@@ -1,6 +1,7 @@
 package rw.stockmanagement.stock_management.controllers;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import rw.stockmanagement.stock_management.models.Supplier;
@@ -16,7 +17,16 @@ public class SupplierController {
     private final SupplierService supplierService;
 
     @GetMapping("/shop/{shopId}")
-    public ResponseEntity<List<Supplier>> getAllSuppliers(@PathVariable Long shopId) {
+    public ResponseEntity<?> getAllSuppliers(
+            @PathVariable Long shopId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "") String search) {
+        return ResponseEntity.ok(supplierService.getAllSuppliersPaged(shopId, page, size, search));
+    }
+
+    @GetMapping("/shop/{shopId}/all")
+    public ResponseEntity<List<Supplier>> getAllSuppliersUnpaged(@PathVariable Long shopId) {
         return ResponseEntity.ok(supplierService.getAllSuppliers(shopId));
     }
 
