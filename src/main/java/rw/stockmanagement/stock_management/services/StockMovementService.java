@@ -1,6 +1,9 @@
 package rw.stockmanagement.stock_management.services;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import rw.stockmanagement.stock_management.models.*;
@@ -15,28 +18,46 @@ public class StockMovementService {
     private final ProductRepository productRepository;
     private final ShopRepository shopRepository;
     private final SupplierRepository supplierRepository;
-    private final UserRepository userRepository; // ← ADD THIS
+    private final UserRepository userRepository;
 
-    // Get all movements for a shop
     public List<StockMovement> getAllMovements(Long shopId) {
         return stockMovementRepository.findByShopId(shopId);
     }
 
-    // Get movements for a specific product
+    public Page<StockMovement> getAllMovementsPaged(Long shopId, int page, int size, String type, String search) {
+        Pageable pageable = PageRequest.of(page, size);
+        boolean hasSearch = search != null && !search.isEmpty();
+        boolean hasType = type != null && !type.equals("ALL");
+
+        if (hasType && hasSearch) {
+            return stockMovementRepository
+                    .findByShopIdAndTypeAndProductNameContainingIgnoreCaseOrderByCreatedAtDesc(
+                            shopId, StockMovement.MovementType.valueOf(type), search, pageable);
+        } else if (hasType) {
+            return stockMovementRepository
+                    .findByShopIdAndTypeOrderByCreatedAtDesc(
+                            shopId, StockMovement.MovementType.valueOf(type), pageable);
+        } else if (hasSearch) {
+            return stockMovementRepository
+                    .findByShopIdAndProductNameContainingIgnoreCaseOrderByCreatedAtDesc(
+                            shopId, search, pageable);
+        } else {
+            return stockMovementRepository.findByShopIdOrderByCreatedAtDesc(shopId, pageable);
+        }
+    }
+
     public List<StockMovement> getProductMovements(Long productId) {
         return stockMovementRepository.findByProductId(productId);
     }
 
-    // Get movements by type (IN or OUT)
     public List<StockMovement> getMovementsByType(Long shopId, String type) {
         return stockMovementRepository.findByShopIdAndType(
                 shopId, StockMovement.MovementType.valueOf(type.toUpperCase()));
     }
 
-    // Manually add stock IN (restock from supplier)
     @Transactional
     public StockMovement restockFromSupplier(Long shopId, Long productId, Long supplierId,
-                                             Integer quantity, String note, Long userId) { // ← ADD userId
+                                             Integer quantity, String note, Long userId) {
         Shop shop = shopRepository.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
 
@@ -46,11 +67,9 @@ public class StockMovementService {
         supplierRepository.findById(supplierId)
                 .orElseThrow(() -> new RuntimeException("Supplier not found"));
 
-        // Increase stock
         product.setQuantity(product.getQuantity() + quantity);
         productRepository.save(product);
 
-        // Record movement
         StockMovement movement = new StockMovement();
         movement.setShop(shop);
         movement.setProduct(product);
@@ -58,7 +77,6 @@ public class StockMovementService {
         movement.setQuantity(quantity);
         movement.setNote(note != null ? note : "Restock from supplier");
 
-        // ← ADD THIS: save the user who recorded the restock
         if (userId != null) {
             userRepository.findById(userId).ifPresent(movement::setUser);
         }
