@@ -12,6 +12,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -26,13 +27,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(request -> {
                     var config = new org.springframework.web.cors.CorsConfiguration();
-                    config.addAllowedOrigin("http://localhost:5173");
-                    config.addAllowedOrigin("http://localhost");
-                    config.addAllowedOrigin("http://localhost:80");
-                    config.addAllowedOrigin("https://stock-management-frontend-lake.vercel.app");
-                    config.addAllowedOrigin("https://claude.ai");
-                    config.addAllowedMethod("*");
-                    config.addAllowedHeader("*");
+                    config.setAllowedOriginPatterns(List.of("*"));
+                    config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+                    config.setAllowedHeaders(List.of("*"));
                     config.setAllowCredentials(true);
                     return config;
                 }))
@@ -60,3 +57,65 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 }
+//package rw.stockmanagement.stock_management.security;
+//
+//import lombok.RequiredArgsConstructor;
+//import org.springframework.context.annotation.Bean;
+//import org.springframework.context.annotation.Configuration;
+//import org.springframework.security.authentication.AuthenticationManager;
+//import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+//import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+//import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+//import org.springframework.security.config.http.SessionCreationPolicy;
+//import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+//import org.springframework.security.crypto.password.PasswordEncoder;
+//import org.springframework.security.web.SecurityFilterChain;
+//import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+//
+//@Configuration
+//@EnableWebSecurity
+//@RequiredArgsConstructor
+//public class SecurityConfig {
+//
+//    private final JwtFilter jwtFilter;
+//
+//    @Bean
+//    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+//        http
+//                .csrf(csrf -> csrf.disable())
+//                .cors(cors -> cors.configurationSource(request -> {
+//                    var config = new org.springframework.web.cors.CorsConfiguration();
+//                    config.addAllowedOrigin("http://localhost:5173");
+//                    config.addAllowedOrigin("http://localhost");
+//                    config.addAllowedOrigin("http://localhost:80");
+//                    config.addAllowedOrigin("https://stock-management-frontend-lake.vercel.app");
+//                    config.addAllowedOrigin("https://claude.ai");
+//                    config.addAllowedMethod("*");
+//                    config.addAllowedHeader("*");
+//                    config.setAllowCredentials(true);
+//                    return config;
+//                }))
+//                .sessionManagement(session ->
+//                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+//                .authorizeHttpRequests(auth -> auth
+//                        .requestMatchers("/api/auth/**").permitAll()
+//                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/shops").permitAll()
+//                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/shops").permitAll()
+//                        .anyRequest().authenticated()
+//                )
+//                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+//
+//        return http.build();
+//    }
+//
+//    @Bean
+//    public PasswordEncoder passwordEncoder() {
+//        return new BCryptPasswordEncoder();
+//    }
+//
+//    @Bean
+//    public AuthenticationManager authenticationManager(
+//            AuthenticationConfiguration config) throws Exception {
+//        return config.getAuthenticationManager();
+//    }
+//}
