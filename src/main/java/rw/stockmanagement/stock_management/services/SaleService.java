@@ -1,6 +1,9 @@
 package rw.stockmanagement.stock_management.services;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import rw.stockmanagement.stock_management.dto.SaleDTO;
@@ -23,6 +26,11 @@ public class SaleService {
 
     public List<Sale> getAllSales(Long shopId) {
         return saleRepository.findByShopId(shopId);
+    }
+
+    public Page<Sale> getAllSalesPaged(Long shopId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return saleRepository.findByShopIdOrderByDateDesc(shopId, pageable);
     }
 
     public Sale getSale(Long id) {
@@ -87,7 +95,6 @@ public class SaleService {
             movements.add(movement);
         }
 
-        // Batch save — one DB call each instead of N
         productRepository.saveAll(updatedProducts);
         stockMovementRepository.saveAll(movements);
 

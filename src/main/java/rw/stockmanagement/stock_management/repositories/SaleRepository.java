@@ -1,5 +1,7 @@
 package rw.stockmanagement.stock_management.repositories;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -9,6 +11,7 @@ import java.util.List;
 
 public interface SaleRepository extends JpaRepository<Sale, Long> {
     List<Sale> findByShopId(Long shopId);
+    Page<Sale> findByShopIdOrderByDateDesc(Long shopId, Pageable pageable);
     List<Sale> findByShopIdAndDateBetween(Long shopId, LocalDateTime start, LocalDateTime end);
 
     @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM Sale s WHERE s.shop.id = :shopId AND s.date BETWEEN :start AND :end")
