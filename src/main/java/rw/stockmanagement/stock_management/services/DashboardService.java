@@ -22,57 +22,19 @@ public class DashboardService {
     public Map<String, Object> getDashboard(Long shopId) {
         Map<String, Object> dashboard = new HashMap<>();
 
-        // Today's range
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
-
-        // This month's range
         LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
 
-        // Today's sales
-        double todayRevenue = saleRepository
-                .findByShopIdAndDateBetween(shopId, startOfDay, endOfDay)
-                .stream().mapToDouble(s -> s.getTotalAmount()).sum();
+        double todayRevenue = saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
+        double monthRevenue = saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfMonth, endOfDay);
+        long todaySalesCount = saleRepository.countByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
+        double todayPurchaseCost = saleRepository.sumPurchaseCostByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
+        double monthPurchaseCost = saleRepository.sumPurchaseCostByShopIdAndDateBetween(shopId, startOfMonth, endOfDay);
 
-        // This month's revenue
-        double monthRevenue = saleRepository
-                .findByShopIdAndDateBetween(shopId, startOfMonth, endOfDay)
-                .stream().mapToDouble(s -> s.getTotalAmount()).sum();
-
-        // Total sales count today
-        long todaySalesCount = saleRepository
-                .findByShopIdAndDateBetween(shopId, startOfDay, endOfDay).size();
-
-        // Low stock products
         List<Product> lowStockProducts = productRepository.findByShopIdAndQuantityLessThanEqualMinStock(shopId);
-
-        // Total products
-        long totalProducts = productRepository.findByShopId(shopId).size();
-
-        // Total suppliers
-        long totalSuppliers = supplierRepository.findByShopId(shopId).size();
-
-        // This month's purchase cost (based on items actually sold)
-        double monthPurchaseCost = saleRepository
-                .findByShopIdAndDateBetween(shopId, startOfMonth, endOfDay)
-                .stream()
-                .flatMap(sale -> sale.getItems().stream())
-                .mapToDouble(item -> item.getQuantity() * (item.getProduct().getBuyingPrice() != null ? item.getProduct().getBuyingPrice() : 0))
-                .sum();
-
-        // This month's profit
-        double monthProfit = monthRevenue - monthPurchaseCost;
-
-        // Today's purchase cost (based on items actually sold today)
-        double todayPurchaseCost = saleRepository
-                .findByShopIdAndDateBetween(shopId, startOfDay, endOfDay)
-                .stream()
-                .flatMap(sale -> sale.getItems().stream())
-                .mapToDouble(item -> item.getQuantity() * (item.getProduct().getBuyingPrice() != null ? item.getProduct().getBuyingPrice() : 0))
-                .sum();
-
-        // Today's profit
-        double todayProfit = todayRevenue - todayPurchaseCost;
+        long totalProducts = productRepository.countByShopId(shopId);
+        long totalSuppliers = supplierRepository.countByShopId(shopId);
 
         dashboard.put("todayRevenue", todayRevenue);
         dashboard.put("monthRevenue", monthRevenue);
@@ -82,8 +44,8 @@ public class DashboardService {
         dashboard.put("totalProducts", totalProducts);
         dashboard.put("totalSuppliers", totalSuppliers);
         dashboard.put("monthPurchaseCost", monthPurchaseCost);
-        dashboard.put("monthProfit", monthProfit);
-        dashboard.put("todayProfit", todayProfit);
+        dashboard.put("monthProfit", monthRevenue - monthPurchaseCost);
+        dashboard.put("todayProfit", todayRevenue - todayPurchaseCost);
 
         return dashboard;
     }

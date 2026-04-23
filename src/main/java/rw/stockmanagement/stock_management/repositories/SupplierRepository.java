@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface SupplierRepository extends JpaRepository<Supplier, Long> {
     List<Supplier> findByShopId(Long shopId);
+    long countByShopId(Long shopId);
 }
