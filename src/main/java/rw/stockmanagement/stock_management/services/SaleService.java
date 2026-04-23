@@ -21,18 +21,15 @@ public class SaleService {
     private final StockMovementRepository stockMovementRepository;
     private final SupplierRepository supplierRepository;
 
-    // Get all sales for a shop
     public List<Sale> getAllSales(Long shopId) {
         return saleRepository.findByShopId(shopId);
     }
 
-    // Get single sale
     public Sale getSale(Long id) {
         return saleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Sale not found"));
     }
 
-    // Create a sale
     @Transactional
     public Sale createSale(SaleDTO dto) {
         Shop shop = shopRepository.findById(dto.getShopId())
@@ -46,13 +43,14 @@ public class SaleService {
         sale.setUser(user);
         sale.setPaymentMethod(dto.getPaymentMethod());
 
-        // Set supplier if provided
         if (dto.getSupplierId() != null) {
             supplierRepository.findById(dto.getSupplierId())
                     .ifPresent(sale::setSupplier);
         }
 
         List<SaleItem> saleItems = new ArrayList<>();
+        List<Product> updatedProducts = new ArrayList<>();
+        List<StockMovement> movements = new ArrayList<>();
         double totalAmount = 0.0;
 
         for (SaleDTO.SaleItemDTO itemDTO : dto.getItems()) {
@@ -61,7 +59,7 @@ public class SaleService {
 
             if (product.getQuantity() < itemDTO.getQuantity()) {
                 throw new RuntimeException(
-                        "Insufficient stock for product: " + product.getName() +
+                        "Insufficient stock for: " + product.getName() +
                                 ". Available: " + product.getQuantity()
                 );
             }
@@ -78,7 +76,7 @@ public class SaleService {
             saleItems.add(saleItem);
 
             product.setQuantity(product.getQuantity() - itemDTO.getQuantity());
-            productRepository.save(product);
+            updatedProducts.add(product);
 
             StockMovement movement = new StockMovement();
             movement.setShop(shop);
@@ -86,8 +84,12 @@ public class SaleService {
             movement.setType(StockMovement.MovementType.OUT);
             movement.setQuantity(itemDTO.getQuantity());
             movement.setNote("Sale transaction");
-            stockMovementRepository.save(movement);
+            movements.add(movement);
         }
+
+        // Batch save — one DB call each instead of N
+        productRepository.saveAll(updatedProducts);
+        stockMovementRepository.saveAll(movements);
 
         sale.setTotalAmount(totalAmount);
         sale.setItems(saleItems);
@@ -95,18 +97,9 @@ public class SaleService {
         return saleRepository.save(sale);
     }
 
-    // Get today's sales total
     public Double getTodayTotal(Long shopId) {
-        java.time.LocalDateTime startOfDay =
-                java.time.LocalDate.now().atStartOfDay();
-        java.time.LocalDateTime endOfDay =
-                java.time.LocalDate.now().atTime(23, 59, 59);
-
-        List<Sale> todaySales = saleRepository
-                .findByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
-
-        return todaySales.stream()
-                .mapToDouble(Sale::getTotalAmount)
-                .sum();
+        java.time.LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
+        java.time.LocalDateTime endOfDay = java.time.LocalDate.now().atTime(23, 59, 59);
+        return saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
     }
 }
