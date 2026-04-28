@@ -26,8 +26,6 @@ public class DailyReportService {
 
     public void sendDailyReport() {
 
-        // Debug — print all env vars containing SEND or REPORT
-
         // Debug — print ALL env vars
         System.out.println("=== ALL ENV VARS ===");
         System.getenv().forEach((k, v) -> {
@@ -35,12 +33,11 @@ public class DailyReportService {
         });
         System.out.println("=== END ALL ENV VARS ===");
 
-        String sendGridApiKey = System.getenv("SENDGRID_API_KEY");
-        if (sendGridApiKey == null) sendGridApiKey = System.getProperty("SENDGRID_API_KEY");
-
-        String fromEmail = System.getenv("SENDGRID_FROM_EMAIL") != null ? System.getenv("SENDGRID_FROM_EMAIL") : "bizimungu2004@gmail.com";
-        String recipient = System.getenv("REPORT_RECIPIENT") != null ? System.getenv("REPORT_RECIPIENT") : "bizimungu2004@gmail.com";
-        String shopIdEnv = System.getenv("REPORT_SHOP_ID");
+        // Read with new variable names
+        String sendGridApiKey = System.getenv("APP_SENDGRID_KEY");
+        String fromEmail = System.getenv("APP_SENDGRID_FROM") != null ? System.getenv("APP_SENDGRID_FROM") : "bizimungu2004@gmail.com";
+        String recipient = System.getenv("APP_REPORT_TO") != null ? System.getenv("APP_REPORT_TO") : "bizimungu2004@gmail.com";
+        String shopIdEnv = System.getenv("APP_REPORT_SHOP");
         Long shopId = shopIdEnv != null ? Long.parseLong(shopIdEnv) : 5L;
 
         System.out.println("API Key present: " + (sendGridApiKey != null));
