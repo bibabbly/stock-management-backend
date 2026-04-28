@@ -31,6 +31,14 @@ public class DailyReportService {
         String shopIdEnv = System.getenv("REPORT_SHOP_ID");
         Long shopId = shopIdEnv != null ? Long.parseLong(shopIdEnv) : 5L;
 
+        // Debug log
+        System.out.println("API Key present: " + (sendGridApiKey != null));
+        System.out.println("API Key length: " + (sendGridApiKey != null ? sendGridApiKey.length() : 0));
+        System.out.println("API Key starts with: " + (sendGridApiKey != null ? sendGridApiKey.substring(0, 10) : "null"));
+        System.out.println("From email: " + fromEmail);
+        System.out.println("Recipient: " + recipient);
+        System.out.println("Shop ID: " + shopId);
+
         LocalDate yesterday = LocalDate.now().minusDays(1);
         LocalDateTime start = yesterday.atStartOfDay();
         LocalDateTime end = yesterday.atTime(23, 59, 59);
@@ -87,6 +95,7 @@ public class DailyReportService {
             Response response = sg.api(request);
 
             System.out.println("Email sent. Status: " + response.getStatusCode());
+            System.out.println("Response body: " + response.getBody());
         } catch (IOException e) {
             System.err.println("Failed to send daily report: " + e.getMessage());
         }
