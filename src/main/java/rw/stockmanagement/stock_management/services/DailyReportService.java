@@ -1,14 +1,16 @@
 package rw.stockmanagement.stock_management.services;
 
+import com.sendgrid.*;
+import com.sendgrid.helpers.mail.Mail;
+import com.sendgrid.helpers.mail.objects.Content;
+import com.sendgrid.helpers.mail.objects.Email;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import rw.stockmanagement.stock_management.models.Product;
 import rw.stockmanagement.stock_management.models.Sale;
 import rw.stockmanagement.stock_management.repositories.*;
-import jakarta.mail.internet.MimeMessage;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -22,7 +24,12 @@ public class DailyReportService {
     private final SaleRepository saleRepository;
     private final ProductRepository productRepository;
     private final StockMovementRepository stockMovementRepository;
-    private final JavaMailSender mailSender;
+
+    @Value("${sendgrid.api-key}")
+    private String sendGridApiKey;
+
+    @Value("${sendgrid.from-email}")
+    private String fromEmail;
 
     @Value("${app.report.recipient}")
     private String recipient;
@@ -75,17 +82,24 @@ public class DailyReportService {
                 .mapToLong(m -> m.getQuantity())
                 .sum();
 
-        // Build email HTML
         String html = buildHtml(dateStr, sales.size(), revenue, profit, topProducts, lowStock, stockIn, stockOut);
 
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setTo(recipient);
-            helper.setSubject("📊 BizTrack Daily Report — " + dateStr);
-            helper.setText(html, true);
-            mailSender.send(message);
-        } catch (Exception e) {
+            Email from = new Email(fromEmail, "BizTrack");
+            Email to = new Email(recipient);
+            Subject subject = new Subject("📊 BizTrack Daily Report — " + dateStr);
+            Content content = new Content("text/html", html);
+            Mail mail = new Mail(from, subject.getValue(), to, content);
+
+            SendGrid sg = new SendGrid(sendGridApiKey);
+            Request request = new Request();
+            request.setMethod(Method.POST);
+            request.setEndpoint("mail/send");
+            request.setBody(mail.build());
+            Response response = sg.api(request);
+
+            System.out.println("Email sent. Status: " + response.getStatusCode());
+        } catch (IOException e) {
             System.err.println("Failed to send daily report: " + e.getMessage());
         }
     }
@@ -125,35 +139,25 @@ public class DailyReportService {
 
         return "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;'>" +
                 "<div style='max-width:600px;margin:20px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;'>" +
-
-                // Header
                 "<div style='background:linear-gradient(135deg,#3b82f6,#06b6d4);padding:30px;text-align:center;'>" +
                 "<h1 style='color:white;margin:0;font-size:22px;'>📊 BizTrack Daily Report</h1>" +
                 "<p style='color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:14px;'>" + date + "</p>" +
                 "</div>" +
-
-                // Summary cards
                 "<div style='padding:24px;'>" +
                 "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;'>" +
-
                 "<div style='background:#f0fdf4;border-radius:12px;padding:16px;text-align:center;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Sales</p>" +
                 "<p style='color:#16a34a;font-size:24px;font-weight:700;margin:0;'>" + salesCount + "</p>" +
                 "</div>" +
-
                 "<div style='background:#eff6ff;border-radius:12px;padding:16px;text-align:center;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Revenue</p>" +
                 "<p style='color:#3b82f6;font-size:18px;font-weight:700;margin:0;'>RWF " + String.format("%,.0f", revenue) + "</p>" +
                 "</div>" +
-
                 "<div style='background:" + (profit >= 0 ? "#f0fdf4" : "#fef2f2") + ";border-radius:12px;padding:16px;text-align:center;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Profit</p>" +
                 "<p style='color:" + (profit >= 0 ? "#16a34a" : "#ef4444") + ";font-size:18px;font-weight:700;margin:0;'>RWF " + String.format("%,.0f", profit) + "</p>" +
                 "</div>" +
-
                 "</div>" +
-
-                // Stock movements
                 "<div style='background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:24px;display:flex;justify-content:space-around;'>" +
                 "<div style='text-align:center;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Stock IN</p>" +
@@ -164,26 +168,25 @@ public class DailyReportService {
                 "<p style='color:#ef4444;font-size:20px;font-weight:700;margin:0;'>-" + stockOut + "</p>" +
                 "</div>" +
                 "</div>" +
-
-                // Top products
                 "<div style='margin-bottom:24px;'>" +
                 "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>🏆 Top Selling Products</h3>" +
                 topProductsHtml +
                 "</div>" +
-
-                // Low stock
                 "<div style='margin-bottom:24px;'>" +
                 "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>⚠️ Low Stock Alerts</h3>" +
                 lowStockHtml +
                 "</div>" +
-
                 "</div>" +
-
-                // Footer
                 "<div style='background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;'>" +
                 "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by INNOTEWO INC LTD · Kigali, Rwanda</p>" +
                 "</div>" +
-
                 "</div></body></html>";
+    }
+
+    // Helper class for subject
+    static class Subject {
+        private final String value;
+        Subject(String value) { this.value = value; }
+        String getValue() { return value; }
     }
 }
