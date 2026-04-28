@@ -25,16 +25,27 @@ public class DailyReportService {
     private final StockMovementRepository stockMovementRepository;
 
     public void sendDailyReport() {
+
+        // Debug — print all env vars containing SEND or REPORT
+        System.out.println("=== ENV VAR DEBUG ===");
+        System.getenv().forEach((k, v) -> {
+            if (k.contains("SEND") || k.contains("REPORT") || k.contains("sendgrid")) {
+                System.out.println(k + " = " + (v != null ? v.substring(0, Math.min(8, v.length())) + "..." : "null"));
+            }
+        });
+        System.out.println("=== END ENV VAR DEBUG ===");
+
         String sendGridApiKey = System.getenv("SENDGRID_API_KEY");
+        if (sendGridApiKey == null) sendGridApiKey = System.getProperty("SENDGRID_API_KEY");
+
         String fromEmail = System.getenv("SENDGRID_FROM_EMAIL") != null ? System.getenv("SENDGRID_FROM_EMAIL") : "bizimungu2004@gmail.com";
         String recipient = System.getenv("REPORT_RECIPIENT") != null ? System.getenv("REPORT_RECIPIENT") : "bizimungu2004@gmail.com";
         String shopIdEnv = System.getenv("REPORT_SHOP_ID");
         Long shopId = shopIdEnv != null ? Long.parseLong(shopIdEnv) : 5L;
 
-        // Debug log
         System.out.println("API Key present: " + (sendGridApiKey != null));
         System.out.println("API Key length: " + (sendGridApiKey != null ? sendGridApiKey.length() : 0));
-        System.out.println("API Key starts with: " + (sendGridApiKey != null ? sendGridApiKey.substring(0, 10) : "null"));
+        System.out.println("API Key starts with: " + (sendGridApiKey != null ? sendGridApiKey.substring(0, Math.min(10, sendGridApiKey.length())) : "null"));
         System.out.println("From email: " + fromEmail);
         System.out.println("Recipient: " + recipient);
         System.out.println("Shop ID: " + shopId);
