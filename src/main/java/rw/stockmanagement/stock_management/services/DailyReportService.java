@@ -5,7 +5,6 @@ import com.sendgrid.helpers.mail.Mail;
 import com.sendgrid.helpers.mail.objects.Content;
 import com.sendgrid.helpers.mail.objects.Email;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import rw.stockmanagement.stock_management.models.Product;
 import rw.stockmanagement.stock_management.models.Sale;
@@ -25,25 +24,17 @@ public class DailyReportService {
     private final ProductRepository productRepository;
     private final StockMovementRepository stockMovementRepository;
 
-    @Value("${sendgrid.api-key}")
-    private String sendGridApiKey;
-
-    @Value("${sendgrid.from-email}")
-    private String fromEmail;
-
-    @Value("${app.report.recipient}")
-    private String recipient;
-
-    @Value("${app.report.shop-id}")
-    private Long shopId;
-
     public void sendDailyReport() {
+        String sendGridApiKey = System.getenv("SENDGRID_API_KEY");
+        String fromEmail = System.getenv("SENDGRID_FROM_EMAIL");
+        String recipient = System.getenv("REPORT_RECIPIENT");
+        Long shopId = Long.parseLong(System.getenv("REPORT_SHOP_ID"));
+
         LocalDate yesterday = LocalDate.now().minusDays(1);
         LocalDateTime start = yesterday.atStartOfDay();
         LocalDateTime end = yesterday.atTime(23, 59, 59);
         String dateStr = yesterday.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
 
-        // Yesterday's sales
         List<Sale> sales = saleRepository.findByShopIdAndDateBetween(shopId, start, end);
         double revenue = sales.stream().mapToDouble(Sale::getTotalAmount).sum();
         double cost = sales.stream()
@@ -52,7 +43,6 @@ public class DailyReportService {
                 .sum();
         double profit = revenue - cost;
 
-        // Top 5 selling products
         Map<String, Integer> productSales = new LinkedHashMap<>();
         sales.stream()
                 .flatMap(s -> s.getItems().stream())
@@ -66,10 +56,8 @@ public class DailyReportService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-        // Low stock products
         List<Product> lowStock = productRepository.findByShopIdAndQuantityLessThanEqualMinStock(shopId);
 
-        // Stock movements yesterday
         long stockIn = stockMovementRepository.findByShopId(shopId).stream()
                 .filter(m -> !m.getCreatedAt().isBefore(start) && !m.getCreatedAt().isAfter(end))
                 .filter(m -> m.getType().name().equals("IN"))
@@ -87,9 +75,8 @@ public class DailyReportService {
         try {
             Email from = new Email(fromEmail, "BizTrack");
             Email to = new Email(recipient);
-            Subject subject = new Subject("📊 BizTrack Daily Report — " + dateStr);
             Content content = new Content("text/html", html);
-            Mail mail = new Mail(from, subject.getValue(), to, content);
+            Mail mail = new Mail(from, "📊 BizTrack Daily Report — " + dateStr, to, content);
 
             SendGrid sg = new SendGrid(sendGridApiKey);
             Request request = new Request();
@@ -181,12 +168,5 @@ public class DailyReportService {
                 "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by INNOTEWO INC LTD · Kigali, Rwanda</p>" +
                 "</div>" +
                 "</div></body></html>";
-    }
-
-    // Helper class for subject
-    static class Subject {
-        private final String value;
-        Subject(String value) { this.value = value; }
-        String getValue() { return value; }
     }
 }
