@@ -26,9 +26,10 @@ public class DailyReportService {
 
     public void sendDailyReport() {
         String sendGridApiKey = System.getenv("SENDGRID_API_KEY");
-        String fromEmail = System.getenv("SENDGRID_FROM_EMAIL");
-        String recipient = System.getenv("REPORT_RECIPIENT");
-        Long shopId = Long.parseLong(System.getenv("REPORT_SHOP_ID"));
+        String fromEmail = System.getenv("SENDGRID_FROM_EMAIL") != null ? System.getenv("SENDGRID_FROM_EMAIL") : "bizimungu2004@gmail.com";
+        String recipient = System.getenv("REPORT_RECIPIENT") != null ? System.getenv("REPORT_RECIPIENT") : "bizimungu2004@gmail.com";
+        String shopIdEnv = System.getenv("REPORT_SHOP_ID");
+        Long shopId = shopIdEnv != null ? Long.parseLong(shopIdEnv) : 5L;
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
         LocalDateTime start = yesterday.atStartOfDay();
