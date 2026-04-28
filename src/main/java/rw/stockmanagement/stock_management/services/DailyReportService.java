@@ -27,13 +27,13 @@ public class DailyReportService {
     public void sendDailyReport() {
 
         // Debug — print all env vars containing SEND or REPORT
-        System.out.println("=== ENV VAR DEBUG ===");
+
+        // Debug — print ALL env vars
+        System.out.println("=== ALL ENV VARS ===");
         System.getenv().forEach((k, v) -> {
-            if (k.contains("SEND") || k.contains("REPORT") || k.contains("sendgrid")) {
-                System.out.println(k + " = " + (v != null ? v.substring(0, Math.min(8, v.length())) + "..." : "null"));
-            }
+            System.out.println(k + " = " + (v != null ? v.substring(0, Math.min(5, v.length())) + "..." : "null"));
         });
-        System.out.println("=== END ENV VAR DEBUG ===");
+        System.out.println("=== END ALL ENV VARS ===");
 
         String sendGridApiKey = System.getenv("SENDGRID_API_KEY");
         if (sendGridApiKey == null) sendGridApiKey = System.getProperty("SENDGRID_API_KEY");
