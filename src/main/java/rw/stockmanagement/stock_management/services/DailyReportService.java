@@ -27,11 +27,11 @@ public class DailyReportService {
     public void sendDailyReport() {
 
         // Debug — print ALL env vars
-        System.out.println("=== ALL ENV VARS ===");
-        System.getenv().forEach((k, v) -> {
-            System.out.println(k + " = " + (v != null ? v.substring(0, Math.min(5, v.length())) + "..." : "null"));
-        });
-        System.out.println("=== END ALL ENV VARS ===");
+//        System.out.println("=== ALL ENV VARS ===");
+//        System.getenv().forEach((k, v) -> {
+//            System.out.println(k + " = " + (v != null ? v.substring(0, Math.min(5, v.length())) + "..." : "null"));
+//        });
+//        System.out.println("=== END ALL ENV VARS ===");
 
         // Read with new variable names
         String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
@@ -40,12 +40,12 @@ public class DailyReportService {
         String shopIdEnv = System.getenv("SPRING_REPORT_SHOP");
         Long shopId = shopIdEnv != null ? Long.parseLong(shopIdEnv) : 5L;
 
-        System.out.println("API Key present: " + (sendGridApiKey != null));
-        System.out.println("API Key length: " + (sendGridApiKey != null ? sendGridApiKey.length() : 0));
-        System.out.println("API Key starts with: " + (sendGridApiKey != null ? sendGridApiKey.substring(0, Math.min(10, sendGridApiKey.length())) : "null"));
-        System.out.println("From email: " + fromEmail);
-        System.out.println("Recipient: " + recipient);
-        System.out.println("Shop ID: " + shopId);
+//        System.out.println("API Key present: " + (sendGridApiKey != null));
+//        System.out.println("API Key length: " + (sendGridApiKey != null ? sendGridApiKey.length() : 0));
+//        System.out.println("API Key starts with: " + (sendGridApiKey != null ? sendGridApiKey.substring(0, Math.min(10, sendGridApiKey.length())) : "null"));
+//        System.out.println("From email: " + fromEmail);
+//        System.out.println("Recipient: " + recipient);
+//        System.out.println("Shop ID: " + shopId);
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
         LocalDateTime start = yesterday.atStartOfDay();
