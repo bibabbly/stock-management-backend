@@ -42,7 +42,7 @@ public class User {
     }
 
     public enum Role {
-        ADMIN, CASHIER
+        ADMIN, CASHIER, SUPER_ADMIN
     }
 
 
