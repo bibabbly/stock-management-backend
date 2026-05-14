@@ -61,4 +61,17 @@ public class AuthController {
         userRepository.save(user);
         return ResponseEntity.ok("User registered successfully");
     }
+    @PostMapping("/create-super-admin")
+    public ResponseEntity<String> createSuperAdmin() {
+        if (userRepository.findByEmail("superadmin@innotewo.com").isPresent()) {
+            return ResponseEntity.ok("Super admin already exists");
+        }
+        User user = new User();
+        user.setName("Super Admin");
+        user.setEmail("superadmin@innotewo.com");
+        user.setPassword(passwordEncoder.encode("admin@innotewo2026"));
+        user.setRole(User.Role.SUPER_ADMIN);
+        userRepository.save(user);
+        return ResponseEntity.ok("Super admin created successfully");
+    }
 }
