@@ -33,4 +33,11 @@ public class Shop {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
+
+
+    @Column(nullable = false)
+    private boolean active = true;
+
+    @Column(name = "owner_email")
+    private String ownerEmail;
 }

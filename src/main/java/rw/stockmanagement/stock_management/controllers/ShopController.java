@@ -50,4 +50,12 @@ public class ShopController {
             return ResponseEntity.ok(shopRepository.save(shop));
         }).orElse(ResponseEntity.notFound().build());
     }
+
+    @PutMapping("/{id}/toggle")
+    public ResponseEntity<Shop> toggleShop(@PathVariable Long id) {
+        return shopRepository.findById(id).map(shop -> {
+            shop.setActive(!shop.isActive());
+            return ResponseEntity.ok(shopRepository.save(shop));
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }
