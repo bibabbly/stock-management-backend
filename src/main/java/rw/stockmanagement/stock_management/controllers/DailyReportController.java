@@ -16,6 +16,12 @@ public class DailyReportController {
     @PostMapping("/send-daily")
     public ResponseEntity<String> sendNow() {
         dailyReportService.sendDailyReport();
-        return ResponseEntity.ok("Daily report sent!");
+        return ResponseEntity.ok("Daily reports sent to all active shops!");
+    }
+
+    @PostMapping("/send-daily/{shopId}")
+    public ResponseEntity<String> sendForShop(@PathVariable Long shopId) {
+        dailyReportService.sendDailyReportForShop(shopId);
+        return ResponseEntity.ok("Daily report sent for shop " + shopId);
     }
 }

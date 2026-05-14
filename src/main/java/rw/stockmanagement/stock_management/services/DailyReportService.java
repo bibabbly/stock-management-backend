@@ -4,10 +4,12 @@ import com.sendgrid.*;
 import com.sendgrid.helpers.mail.Mail;
 import com.sendgrid.helpers.mail.objects.Content;
 import com.sendgrid.helpers.mail.objects.Email;
+import com.sendgrid.helpers.mail.objects.Personalization;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import rw.stockmanagement.stock_management.models.Product;
 import rw.stockmanagement.stock_management.models.Sale;
+import rw.stockmanagement.stock_management.models.Shop;
 import rw.stockmanagement.stock_management.repositories.*;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -23,34 +25,31 @@ public class DailyReportService {
     private final SaleRepository saleRepository;
     private final ProductRepository productRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final ShopRepository shopRepository;
 
     public void sendDailyReport() {
-
-        // Debug — print ALL env vars
-//        System.out.println("=== ALL ENV VARS ===");
-//        System.getenv().forEach((k, v) -> {
-//            System.out.println(k + " = " + (v != null ? v.substring(0, Math.min(5, v.length())) + "..." : "null"));
-//        });
-//        System.out.println("=== END ALL ENV VARS ===");
-
-        // Read with new variable names
         String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
-        String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "bizimungu2004@gmail.com";
-        String recipient = System.getenv("SPRING_REPORT_TO") != null ? System.getenv("SPRING_REPORT_TO") : "bizimungu2004@gmail.com";
-        String shopIdEnv = System.getenv("SPRING_REPORT_SHOP");
-        Long shopId = shopIdEnv != null ? Long.parseLong(shopIdEnv) : 5L;
-
-//        System.out.println("API Key present: " + (sendGridApiKey != null));
-//        System.out.println("API Key length: " + (sendGridApiKey != null ? sendGridApiKey.length() : 0));
-//        System.out.println("API Key starts with: " + (sendGridApiKey != null ? sendGridApiKey.substring(0, Math.min(10, sendGridApiKey.length())) : "null"));
-//        System.out.println("From email: " + fromEmail);
-//        System.out.println("Recipient: " + recipient);
-//        System.out.println("Shop ID: " + shopId);
+        String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "noreply@innotewo.com";
+        String ccEmail = System.getenv("SPRING_REPORT_TO") != null ? System.getenv("SPRING_REPORT_TO") : "bizimungu2004@gmail.com";
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
         LocalDateTime start = yesterday.atStartOfDay();
         LocalDateTime end = yesterday.atTime(23, 59, 59);
         String dateStr = yesterday.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
+
+        // Get all active shops
+        List<Shop> activeShops = shopRepository.findAll().stream()
+                .filter(Shop::isActive)
+                .collect(Collectors.toList());
+
+        for (Shop shop : activeShops) {
+            sendShopReport(shop, sendGridApiKey, fromEmail, ccEmail, start, end, dateStr);
+        }
+    }
+
+    public void sendShopReport(Shop shop, String sendGridApiKey, String fromEmail, String ccEmail,
+                               LocalDateTime start, LocalDateTime end, String dateStr) {
+        Long shopId = shop.getId();
 
         List<Sale> sales = saleRepository.findByShopIdAndDateBetween(shopId, start, end);
         double revenue = sales.stream().mapToDouble(Sale::getTotalAmount).sum();
@@ -87,13 +86,24 @@ public class DailyReportService {
                 .mapToLong(m -> m.getQuantity())
                 .sum();
 
-        String html = buildHtml(dateStr, sales.size(), revenue, profit, topProducts, lowStock, stockIn, stockOut);
+        String html = buildHtml(shop.getName(), dateStr, sales.size(), revenue, profit, topProducts, lowStock, stockIn, stockOut);
+
+        // Determine recipient — use ownerEmail if set, otherwise skip
+        String recipientEmail = shop.getOwnerEmail();
+        if (recipientEmail == null || recipientEmail.isEmpty()) {
+            System.out.println("Skipping shop " + shop.getName() + " — no owner email set");
+            return;
+        }
 
         try {
             Email from = new Email(fromEmail, "BizTrack");
-            Email to = new Email(recipient);
+            Email to = new Email(recipientEmail);
             Content content = new Content("text/html", html);
-            Mail mail = new Mail(from, "📊 BizTrack Daily Report — " + dateStr, to, content);
+            Mail mail = new Mail(from, "📊 BizTrack Daily Report — " + shop.getName() + " — " + dateStr, to, content);
+
+            // Silent CC to super admin
+            Personalization personalization = mail.getPersonalization().get(0);
+            personalization.addCc(new Email(ccEmail));
 
             SendGrid sg = new SendGrid(sendGridApiKey);
             Request request = new Request();
@@ -102,14 +112,28 @@ public class DailyReportService {
             request.setBody(mail.build());
             Response response = sg.api(request);
 
-            System.out.println("Email sent. Status: " + response.getStatusCode());
-            System.out.println("Response body: " + response.getBody());
+            System.out.println("Report sent to " + shop.getName() + " (" + recipientEmail + ") — Status: " + response.getStatusCode());
         } catch (IOException e) {
-            System.err.println("Failed to send daily report: " + e.getMessage());
+            System.err.println("Failed to send report for " + shop.getName() + ": " + e.getMessage());
         }
     }
 
-    private String buildHtml(String date, int salesCount, double revenue, double profit,
+    // Manual trigger for single shop
+    public void sendDailyReportForShop(Long shopId) {
+        String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
+        String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "noreply@innotewo.com";
+        String ccEmail = System.getenv("SPRING_REPORT_TO") != null ? System.getenv("SPRING_REPORT_TO") : "bizimungu2004@gmail.com";
+
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        LocalDateTime start = yesterday.atStartOfDay();
+        LocalDateTime end = yesterday.atTime(23, 59, 59);
+        String dateStr = yesterday.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
+
+        shopRepository.findById(shopId).ifPresent(shop ->
+                sendShopReport(shop, sendGridApiKey, fromEmail, ccEmail, start, end, dateStr));
+    }
+
+    private String buildHtml(String shopName, String date, int salesCount, double revenue, double profit,
                              List<Map.Entry<String, Integer>> topProducts,
                              List<Product> lowStock, long stockIn, long stockOut) {
 
@@ -146,7 +170,8 @@ public class DailyReportService {
                 "<div style='max-width:600px;margin:20px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;'>" +
                 "<div style='background:linear-gradient(135deg,#3b82f6,#06b6d4);padding:30px;text-align:center;'>" +
                 "<h1 style='color:white;margin:0;font-size:22px;'>📊 BizTrack Daily Report</h1>" +
-                "<p style='color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:14px;'>" + date + "</p>" +
+                "<p style='color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:15px;font-weight:600;'>" + shopName + "</p>" +
+                "<p style='color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px;'>" + date + "</p>" +
                 "</div>" +
                 "<div style='padding:24px;'>" +
                 "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;'>" +
