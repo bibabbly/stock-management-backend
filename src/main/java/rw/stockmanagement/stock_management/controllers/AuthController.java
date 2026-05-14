@@ -25,8 +25,9 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
 
+
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(), request.getPassword()));
@@ -34,9 +35,13 @@ public class AuthController {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
+        // Check if shop is disabled
+        if (user.getShop() != null && !user.getShop().isActive()) {
+            return ResponseEntity.status(403).body("Your subscription has expired. Please contact INNOTEWO INC LTD to renew.");
+        }
+
         String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
 
-        // Get permissions from shopRole, or full access if ADMIN
         List<String> permissions = null;
         if (user.getShopRole() != null) {
             permissions = user.getShopRole().getPermissions();
@@ -53,7 +58,6 @@ public class AuthController {
                 user.getName()
         ));
     }
-
 
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody User user) {
