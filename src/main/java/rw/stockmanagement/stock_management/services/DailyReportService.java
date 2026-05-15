@@ -37,7 +37,6 @@ public class DailyReportService {
         LocalDateTime end = yesterday.atTime(23, 59, 59);
         String dateStr = yesterday.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
 
-        // Get all active shops
         List<Shop> activeShops = shopRepository.findAll().stream()
                 .filter(Shop::isActive)
                 .collect(Collectors.toList());
@@ -51,7 +50,7 @@ public class DailyReportService {
                                LocalDateTime start, LocalDateTime end, String dateStr) {
         Long shopId = shop.getId();
 
-        List<Sale> sales = saleRepository.findByShopIdAndDateBetween(shopId, start, end);
+        List<Sale> sales = saleRepository.findByShopIdAndDateBetweenWithItems(shopId, start, end);
         double revenue = sales.stream().mapToDouble(Sale::getTotalAmount).sum();
         double cost = sales.stream()
                 .flatMap(s -> s.getItems().stream())
@@ -88,7 +87,6 @@ public class DailyReportService {
 
         String html = buildHtml(shop.getName(), dateStr, sales.size(), revenue, profit, topProducts, lowStock, stockIn, stockOut);
 
-        // Determine recipient — use ownerEmail if set, otherwise skip
         String recipientEmail = shop.getOwnerEmail();
         if (recipientEmail == null || recipientEmail.isEmpty()) {
             System.out.println("Skipping shop " + shop.getName() + " — no owner email set");
@@ -101,7 +99,6 @@ public class DailyReportService {
             Content content = new Content("text/html", html);
             Mail mail = new Mail(from, "📊 BizTrack Daily Report — " + shop.getName() + " — " + dateStr, to, content);
 
-            // Silent CC to super admin
             Personalization personalization = mail.getPersonalization().get(0);
             personalization.addCc(new Email(ccEmail));
 
@@ -118,7 +115,6 @@ public class DailyReportService {
         }
     }
 
-    // Manual trigger for single shop
     public void sendDailyReportForShop(Long shopId) {
         String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
         String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "noreply@innotewo.com";

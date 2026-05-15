@@ -14,6 +14,9 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
     Page<Sale> findByShopIdOrderByDateDesc(Long shopId, Pageable pageable);
     List<Sale> findByShopIdAndDateBetween(Long shopId, LocalDateTime start, LocalDateTime end);
 
+    @Query("SELECT DISTINCT s FROM Sale s LEFT JOIN FETCH s.items i LEFT JOIN FETCH i.product WHERE s.shop.id = :shopId AND s.date BETWEEN :start AND :end")
+    List<Sale> findByShopIdAndDateBetweenWithItems(@Param("shopId") Long shopId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
     @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM Sale s WHERE s.shop.id = :shopId AND s.date BETWEEN :start AND :end")
     double sumTotalAmountByShopIdAndDateBetween(@Param("shopId") Long shopId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
