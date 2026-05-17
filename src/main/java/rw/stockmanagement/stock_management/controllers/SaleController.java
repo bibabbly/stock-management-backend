@@ -39,4 +39,8 @@ public class SaleController {
     public ResponseEntity<Double> getTodayTotal(@PathVariable Long shopId) {
         return ResponseEntity.ok(saleService.getTodayTotal(shopId));
     }
+    @GetMapping("/shop/{shopId}/all")
+    public ResponseEntity<List<Sale>> getAllSalesUnpaged(@PathVariable Long shopId) {
+        return ResponseEntity.ok(saleService.getAllSales(shopId));
+    }
 }
