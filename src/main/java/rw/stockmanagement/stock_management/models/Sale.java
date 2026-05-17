@@ -25,19 +25,13 @@ public class Sale {
     private User user;
 
     @Column(name = "original_amount")
-    private Double originalAmount;
-
-    @Column(name = "discount_type")
-    private String discountType;
-
-    @Column(name = "discount_value")
-    private Double discountValue;
+    private Double originalAmount; // sum of all item subtotals
 
     @Column(name = "discount_amount")
-    private Double discountAmount;
+    private Double discountAmount; // sum of all item discountAmounts
 
     @Column(name = "total_amount")
-    private Double totalAmount;
+    private Double totalAmount; // originalAmount - discountAmount
 
     @Column(name = "payment_method")
     private String paymentMethod;

@@ -27,5 +27,17 @@ public class SaleItem {
     @Column(name = "unit_price")
     private Double unitPrice;
 
-    private Double subtotal;
+    private Double subtotal; // original = unitPrice * quantity
+
+    @Column(name = "discount_type")
+    private String discountType; // "PERCENTAGE" or "FIXED"
+
+    @Column(name = "discount_value")
+    private Double discountValue;
+
+    @Column(name = "discount_amount")
+    private Double discountAmount;
+
+    @Column(name = "final_subtotal")
+    private Double finalSubtotal; // subtotal - discountAmount
 }

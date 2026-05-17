@@ -59,7 +59,9 @@ public class SaleService {
         List<SaleItem> saleItems = new ArrayList<>();
         List<Product> updatedProducts = new ArrayList<>();
         List<StockMovement> movements = new ArrayList<>();
-        double originalAmount = 0.0;
+
+        double totalOriginal = 0.0;
+        double totalDiscount = 0.0;
 
         for (SaleDTO.SaleItemDTO itemDTO : dto.getItems()) {
             Product product = productRepository.findById(itemDTO.getProductId())
@@ -73,7 +75,20 @@ public class SaleService {
             }
 
             double subtotal = product.getSellingPrice() * itemDTO.getQuantity();
-            originalAmount += subtotal;
+
+            // Calculate item-level discount
+            double itemDiscount = 0.0;
+            if (itemDTO.getDiscountType() != null && itemDTO.getDiscountValue() != null
+                    && itemDTO.getDiscountValue() > 0) {
+                if ("PERCENTAGE".equals(itemDTO.getDiscountType())) {
+                    itemDiscount = subtotal * (itemDTO.getDiscountValue() / 100.0);
+                } else if ("FIXED".equals(itemDTO.getDiscountType())) {
+                    itemDiscount = itemDTO.getDiscountValue();
+                }
+                itemDiscount = Math.min(itemDiscount, subtotal);
+            }
+
+            double finalSubtotal = subtotal - itemDiscount;
 
             SaleItem saleItem = new SaleItem();
             saleItem.setSale(sale);
@@ -81,7 +96,14 @@ public class SaleService {
             saleItem.setQuantity(itemDTO.getQuantity());
             saleItem.setUnitPrice(product.getSellingPrice());
             saleItem.setSubtotal(subtotal);
+            saleItem.setDiscountType(itemDTO.getDiscountType());
+            saleItem.setDiscountValue(itemDTO.getDiscountValue());
+            saleItem.setDiscountAmount(itemDiscount);
+            saleItem.setFinalSubtotal(finalSubtotal);
             saleItems.add(saleItem);
+
+            totalOriginal += subtotal;
+            totalDiscount += itemDiscount;
 
             product.setQuantity(product.getQuantity() - itemDTO.getQuantity());
             updatedProducts.add(product);
@@ -95,25 +117,9 @@ public class SaleService {
             movements.add(movement);
         }
 
-        // Calculate discount
-        double discountAmount = 0.0;
-        if (dto.getDiscountType() != null && dto.getDiscountValue() != null && dto.getDiscountValue() > 0) {
-            if ("PERCENTAGE".equals(dto.getDiscountType())) {
-                discountAmount = originalAmount * (dto.getDiscountValue() / 100.0);
-            } else if ("FIXED".equals(dto.getDiscountType())) {
-                discountAmount = dto.getDiscountValue();
-            }
-            // Make sure discount doesn't exceed total
-            discountAmount = Math.min(discountAmount, originalAmount);
-        }
-
-        double totalAmount = originalAmount - discountAmount;
-
-        sale.setOriginalAmount(originalAmount);
-        sale.setDiscountType(dto.getDiscountType());
-        sale.setDiscountValue(dto.getDiscountValue());
-        sale.setDiscountAmount(discountAmount);
-        sale.setTotalAmount(totalAmount);
+        sale.setOriginalAmount(totalOriginal);
+        sale.setDiscountAmount(totalDiscount);
+        sale.setTotalAmount(totalOriginal - totalDiscount);
         sale.setItems(saleItems);
 
         productRepository.saveAll(updatedProducts);
