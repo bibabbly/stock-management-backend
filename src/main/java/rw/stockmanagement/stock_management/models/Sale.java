@@ -24,6 +24,18 @@ public class Sale {
     @JoinColumn(name = "user_id")
     private User user;
 
+    @Column(name = "original_amount")
+    private Double originalAmount;
+
+    @Column(name = "discount_type")
+    private String discountType;
+
+    @Column(name = "discount_value")
+    private Double discountValue;
+
+    @Column(name = "discount_amount")
+    private Double discountAmount;
+
     @Column(name = "total_amount")
     private Double totalAmount;
 

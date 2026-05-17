@@ -9,6 +9,8 @@ public class SaleDTO {
     private Long userId;
     private String paymentMethod;
     private Long supplierId;
+    private String discountType;  // "PERCENTAGE" or "FIXED"
+    private Double discountValue; // e.g. 10 or 5000
     private List<SaleItemDTO> items;
 
     @Data

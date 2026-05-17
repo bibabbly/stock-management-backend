@@ -59,7 +59,7 @@ public class SaleService {
         List<SaleItem> saleItems = new ArrayList<>();
         List<Product> updatedProducts = new ArrayList<>();
         List<StockMovement> movements = new ArrayList<>();
-        double totalAmount = 0.0;
+        double originalAmount = 0.0;
 
         for (SaleDTO.SaleItemDTO itemDTO : dto.getItems()) {
             Product product = productRepository.findById(itemDTO.getProductId())
@@ -73,7 +73,7 @@ public class SaleService {
             }
 
             double subtotal = product.getSellingPrice() * itemDTO.getQuantity();
-            totalAmount += subtotal;
+            originalAmount += subtotal;
 
             SaleItem saleItem = new SaleItem();
             saleItem.setSale(sale);
@@ -95,11 +95,29 @@ public class SaleService {
             movements.add(movement);
         }
 
-        productRepository.saveAll(updatedProducts);
-        stockMovementRepository.saveAll(movements);
+        // Calculate discount
+        double discountAmount = 0.0;
+        if (dto.getDiscountType() != null && dto.getDiscountValue() != null && dto.getDiscountValue() > 0) {
+            if ("PERCENTAGE".equals(dto.getDiscountType())) {
+                discountAmount = originalAmount * (dto.getDiscountValue() / 100.0);
+            } else if ("FIXED".equals(dto.getDiscountType())) {
+                discountAmount = dto.getDiscountValue();
+            }
+            // Make sure discount doesn't exceed total
+            discountAmount = Math.min(discountAmount, originalAmount);
+        }
 
+        double totalAmount = originalAmount - discountAmount;
+
+        sale.setOriginalAmount(originalAmount);
+        sale.setDiscountType(dto.getDiscountType());
+        sale.setDiscountValue(dto.getDiscountValue());
+        sale.setDiscountAmount(discountAmount);
         sale.setTotalAmount(totalAmount);
         sale.setItems(saleItems);
+
+        productRepository.saveAll(updatedProducts);
+        stockMovementRepository.saveAll(movements);
 
         return saleRepository.save(sale);
     }
