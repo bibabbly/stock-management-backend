@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import rw.stockmanagement.stock_management.models.Shop;
 import rw.stockmanagement.stock_management.repositories.ShopRepository;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/shops")
@@ -15,19 +16,16 @@ public class ShopController {
 
     private final ShopRepository shopRepository;
 
-    // Get all shops
     @GetMapping
     public ResponseEntity<List<Shop>> getAllShops() {
         return ResponseEntity.ok(shopRepository.findAll());
     }
 
-    // Create shop
     @PostMapping
     public ResponseEntity<Shop> createShop(@RequestBody Shop shop) {
         return ResponseEntity.ok(shopRepository.save(shop));
     }
 
-    // Get shop details
     @GetMapping("/{id}")
     public ResponseEntity<Shop> getShop(@PathVariable Long id) {
         return shopRepository.findById(id)
@@ -35,7 +33,6 @@ public class ShopController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Update shop details
     @PutMapping("/{id}")
     public ResponseEntity<Shop> updateShop(@PathVariable Long id, @RequestBody Shop updated) {
         return shopRepository.findById(id).map(shop -> {
@@ -55,6 +52,16 @@ public class ShopController {
     public ResponseEntity<Shop> toggleShop(@PathVariable Long id) {
         return shopRepository.findById(id).map(shop -> {
             shop.setActive(!shop.isActive());
+            return ResponseEntity.ok(shopRepository.save(shop));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/owner-email")
+    public ResponseEntity<Shop> updateOwnerEmail(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        return shopRepository.findById(id).map(shop -> {
+            shop.setOwnerEmail(body.get("ownerEmail"));
             return ResponseEntity.ok(shopRepository.save(shop));
         }).orElse(ResponseEntity.notFound().build());
     }
