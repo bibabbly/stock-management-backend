@@ -108,6 +108,9 @@ public class DailyReportService {
             request.setEndpoint("mail/send");
             request.setBody(mail.build());
             Response response = sg.api(request);
+            System.out.println("SendGrid status: " + response.getStatusCode());
+            System.out.println("SendGrid body: " + response.getBody());
+            System.out.println("SendGrid headers: " + response.getHeaders());
 
             System.out.println("Report sent to " + shop.getName() + " (" + recipientEmail + ") — Status: " + response.getStatusCode());
         } catch (IOException e) {
