@@ -100,7 +100,11 @@ public class DailyReportService {
             Mail mail = new Mail(from, "📊 BizTrack Daily Report — " + shop.getName() + " — " + dateStr, to, content);
 
             Personalization personalization = mail.getPersonalization().get(0);
-            personalization.addCc(new Email(ccEmail));
+            // Only add CC if it's a different email from the recipient
+            if (!ccEmail.equalsIgnoreCase(recipientEmail)) {
+                personalization.addCc(new Email(ccEmail));
+            }
+           // personalization.addCc(new Email(ccEmail));
 
             SendGrid sg = new SendGrid(sendGridApiKey);
             Request request = new Request();
