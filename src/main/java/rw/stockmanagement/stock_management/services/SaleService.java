@@ -155,4 +155,5 @@ public class SaleService {
     public List<Sale> getSalesByDateRange(Long shopId, LocalDateTime start, LocalDateTime end) {
         return saleRepository.findByShopIdAndDateBetweenOptimized(shopId, start, end);
     }
+    //Task
 }
