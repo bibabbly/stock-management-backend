@@ -2,6 +2,7 @@ package rw.stockmanagement.stock_management.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -9,8 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
 import rw.stockmanagement.stock_management.dto.SaleDTO;
 import rw.stockmanagement.stock_management.models.*;
 import rw.stockmanagement.stock_management.repositories.*;
+
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +35,21 @@ public class SaleService {
 
     public Page<Sale> getAllSalesPaged(Long shopId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return saleRepository.findByShopIdOrderByDateDesc(shopId, pageable);
+
+        // Step 1: fast paginated query — no JOIN FETCH, just IDs and count
+        Page<Sale> salesPage = saleRepository.findByShopIdOrderByDateDesc(shopId, pageable);
+
+        // Step 2: fetch full details only for this page's IDs
+        List<Long> ids = salesPage.getContent().stream()
+                .map(Sale::getId)
+                .collect(Collectors.toList());
+
+        List<Sale> salesWithDetails = ids.isEmpty()
+                ? Collections.emptyList()
+                : saleRepository.findByIdsWithDetails(ids);
+
+        // Return as Page with original pagination metadata
+        return new PageImpl<>(salesWithDetails, pageable, salesPage.getTotalElements());
     }
 
     public Sale getSale(Long id) {
@@ -131,5 +150,9 @@ public class SaleService {
         java.time.LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
         java.time.LocalDateTime endOfDay = java.time.LocalDate.now().atTime(23, 59, 59);
         return saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
+    }
+
+    public List<Sale> getSalesByDateRange(Long shopId, LocalDateTime start, LocalDateTime end) {
+        return saleRepository.findByShopIdAndDateBetweenOptimized(shopId, start, end);
     }
 }

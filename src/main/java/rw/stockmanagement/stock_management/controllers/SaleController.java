@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.*;
 import rw.stockmanagement.stock_management.dto.SaleDTO;
 import rw.stockmanagement.stock_management.models.Sale;
 import rw.stockmanagement.stock_management.services.SaleService;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -42,5 +44,15 @@ public class SaleController {
     @GetMapping("/shop/{shopId}/all")
     public ResponseEntity<List<Sale>> getAllSalesUnpaged(@PathVariable Long shopId) {
         return ResponseEntity.ok(saleService.getAllSales(shopId));
+    }
+
+    @GetMapping("/shop/{shopId}/report")
+    public ResponseEntity<List<Sale>> getSalesReport(
+            @PathVariable Long shopId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end = LocalDateTime.parse(endDate + "T23:59:59");
+        return ResponseEntity.ok(saleService.getSalesByDateRange(shopId, start, end));
     }
 }
