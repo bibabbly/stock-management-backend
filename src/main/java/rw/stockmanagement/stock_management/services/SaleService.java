@@ -25,7 +25,7 @@ public class SaleService {
     private final SupplierRepository supplierRepository;
 
     public List<Sale> getAllSales(Long shopId) {
-        return saleRepository.findByShopId(shopId);
+        return saleRepository.findByShopId(shopId, Pageable.unpaged());
     }
 
     public Page<Sale> getAllSalesPaged(Long shopId, int page, int size) {
@@ -76,7 +76,6 @@ public class SaleService {
 
             double subtotal = product.getSellingPrice() * itemDTO.getQuantity();
 
-            // Calculate item-level discount
             double itemDiscount = 0.0;
             if (itemDTO.getDiscountType() != null && itemDTO.getDiscountValue() != null
                     && itemDTO.getDiscountValue() > 0) {

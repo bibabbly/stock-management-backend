@@ -10,8 +10,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface SaleRepository extends JpaRepository<Sale, Long> {
+
     List<Sale> findByShopId(Long shopId);
-    Page<Sale> findByShopIdOrderByDateDesc(Long shopId, Pageable pageable);
+
+    // Optimized paginated query with JOIN FETCH to avoid N+1
+    @Query(value = "SELECT DISTINCT s FROM Sale s LEFT JOIN FETCH s.items i LEFT JOIN FETCH i.product LEFT JOIN FETCH s.user LEFT JOIN FETCH s.supplier WHERE s.shop.id = :shopId ORDER BY s.date DESC",
+            countQuery = "SELECT COUNT(s) FROM Sale s WHERE s.shop.id = :shopId")
+    Page<Sale> findByShopIdOrderByDateDesc(@Param("shopId") Long shopId, Pageable pageable);
+
+    // Optimized unpaged query for reports
+    @Query("SELECT DISTINCT s FROM Sale s LEFT JOIN FETCH s.items i LEFT JOIN FETCH i.product LEFT JOIN FETCH s.user LEFT JOIN FETCH s.supplier WHERE s.shop.id = :shopId ORDER BY s.date DESC")
+    List<Sale> findByShopId(@Param("shopId") Long shopId, Pageable pageable);
+
     List<Sale> findByShopIdAndDateBetween(Long shopId, LocalDateTime start, LocalDateTime end);
 
     @Query("SELECT DISTINCT s FROM Sale s LEFT JOIN FETCH s.items i LEFT JOIN FETCH i.product WHERE s.shop.id = :shopId AND s.date BETWEEN :start AND :end")
