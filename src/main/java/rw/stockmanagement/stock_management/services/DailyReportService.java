@@ -28,8 +28,8 @@ public class DailyReportService {
     private final StockMovementRepository stockMovementRepository;
     private final ShopRepository shopRepository;
 
-    //@Scheduled(cron = "0 0 0 * * *", zone = "UTC")
-    @Scheduled(cron = "0 */5 * * * *")
+    @Scheduled(cron = "0 0 4 * * *", zone = "UTC")  //every 6 Am Rwandan Time
+    //@Scheduled(cron = "0 */5 * * * *")  //every 5 minutes
     public void sendDailyReport() {
         String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
         String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "noreply@innotewo.com";
