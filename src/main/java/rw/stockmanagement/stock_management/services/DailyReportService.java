@@ -6,6 +6,7 @@ import com.sendgrid.helpers.mail.objects.Content;
 import com.sendgrid.helpers.mail.objects.Email;
 import com.sendgrid.helpers.mail.objects.Personalization;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import rw.stockmanagement.stock_management.models.Product;
 import rw.stockmanagement.stock_management.models.Sale;
@@ -27,6 +28,8 @@ public class DailyReportService {
     private final StockMovementRepository stockMovementRepository;
     private final ShopRepository shopRepository;
 
+    //@Scheduled(cron = "0 0 0 * * *", zone = "UTC")
+    @Scheduled(cron = "0 */5 * * * *")
     public void sendDailyReport() {
         String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
         String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "noreply@innotewo.com";
