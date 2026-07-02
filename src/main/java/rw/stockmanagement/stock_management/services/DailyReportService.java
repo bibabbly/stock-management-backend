@@ -1,10 +1,5 @@
 package rw.stockmanagement.stock_management.services;
 
-import com.sendgrid.*;
-import com.sendgrid.helpers.mail.Mail;
-import com.sendgrid.helpers.mail.objects.Content;
-import com.sendgrid.helpers.mail.objects.Email;
-import com.sendgrid.helpers.mail.objects.Personalization;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -12,7 +7,11 @@ import rw.stockmanagement.stock_management.models.Product;
 import rw.stockmanagement.stock_management.models.Sale;
 import rw.stockmanagement.stock_management.models.Shop;
 import rw.stockmanagement.stock_management.repositories.*;
-import java.io.IOException;
+
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -28,11 +27,11 @@ public class DailyReportService {
     private final StockMovementRepository stockMovementRepository;
     private final ShopRepository shopRepository;
 
-    @Scheduled(cron = "0 0 4 * * *", zone = "UTC")  //every 6 Am Rwandan Time
-    //@Scheduled(cron = "0 */5 * * * *")  //every 5 minutes
+    @Scheduled(cron = "0 0 4 * * *", zone = "UTC") // 6AM Rwanda time
+    //@Scheduled(cron = "0 */5 * * * *") // every 5 minutes for testing
     public void sendDailyReport() {
-        String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
-        String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "noreply@innotewo.com";
+        String apiKey = System.getenv("BREVO_API_KEY");
+        String fromEmail = System.getenv("BREVO_FROM") != null ? System.getenv("BREVO_FROM") : "bizimungu2004@gmail.com";
         String ccEmail = System.getenv("SPRING_REPORT_TO") != null ? System.getenv("SPRING_REPORT_TO") : "bizimungu2004@gmail.com";
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
@@ -45,11 +44,11 @@ public class DailyReportService {
                 .collect(Collectors.toList());
 
         for (Shop shop : activeShops) {
-            sendShopReport(shop, sendGridApiKey, fromEmail, ccEmail, start, end, dateStr);
+            sendShopReport(shop, apiKey, fromEmail, ccEmail, start, end, dateStr);
         }
     }
 
-    public void sendShopReport(Shop shop, String sendGridApiKey, String fromEmail, String ccEmail,
+    public void sendShopReport(Shop shop, String apiKey, String fromEmail, String ccEmail,
                                LocalDateTime start, LocalDateTime end, String dateStr) {
         Long shopId = shop.getId();
 
@@ -64,11 +63,8 @@ public class DailyReportService {
         Map<String, Integer> productSales = new LinkedHashMap<>();
         sales.stream()
                 .flatMap(s -> s.getItems().stream())
-                .forEach(item -> productSales.merge(
-                        item.getProduct().getName(),
-                        item.getQuantity(),
-                        Integer::sum
-                ));
+                .forEach(item -> productSales.merge(item.getProduct().getName(), item.getQuantity(), Integer::sum));
+
         List<Map.Entry<String, Integer>> topProducts = productSales.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                 .limit(5)
@@ -79,14 +75,12 @@ public class DailyReportService {
         long stockIn = stockMovementRepository.findByShopId(shopId).stream()
                 .filter(m -> !m.getCreatedAt().isBefore(start) && !m.getCreatedAt().isAfter(end))
                 .filter(m -> m.getType().name().equals("IN"))
-                .mapToLong(m -> m.getQuantity())
-                .sum();
+                .mapToLong(m -> m.getQuantity()).sum();
 
         long stockOut = stockMovementRepository.findByShopId(shopId).stream()
                 .filter(m -> !m.getCreatedAt().isBefore(start) && !m.getCreatedAt().isAfter(end))
                 .filter(m -> m.getType().name().equals("OUT"))
-                .mapToLong(m -> m.getQuantity())
-                .sum();
+                .mapToLong(m -> m.getQuantity()).sum();
 
         String html = buildHtml(shop.getName(), dateStr, sales.size(), revenue, profit, topProducts, lowStock, stockIn, stockOut);
 
@@ -96,37 +90,13 @@ public class DailyReportService {
             return;
         }
 
-        try {
-            Email from = new Email(fromEmail, "BizTrack");
-            Email to = new Email(recipientEmail);
-            Content content = new Content("text/html", html);
-            Mail mail = new Mail(from, "📊 BizTrack Daily Report — " + shop.getName() + " — " + dateStr, to, content);
-
-            Personalization personalization = mail.getPersonalization().get(0);
-            // Only add CC if it's a different email from the recipient
-            if (!ccEmail.equalsIgnoreCase(recipientEmail)) {
-                personalization.addCc(new Email(ccEmail));
-            }
-           // personalization.addCc(new Email(ccEmail));
-
-            SendGrid sg = new SendGrid(sendGridApiKey);
-            Request request = new Request();
-            request.setMethod(Method.POST);
-            request.setEndpoint("mail/send");
-            request.setBody(mail.build());
-            Response response = sg.api(request);
-            //System.out.println("SendGrid status: " + response.getStatusCode());
-           // System.out.println("SendGrid body: " + response.getBody());
-           // System.out.println("SendGrid headers: " + response.getHeaders());
-          //  System.out.println("Report sent to " + shop.getName() + " (" + recipientEmail + ") — Status: " + response.getStatusCode());
-        } catch (IOException e) {
-            System.err.println("Failed to send report for " + shop.getName() + ": " + e.getMessage());
-        }
+        sendBrevoEmail(apiKey, fromEmail, recipientEmail, ccEmail,
+                "📊 BizTrack Daily Report — " + shop.getName() + " — " + dateStr, html);
     }
 
     public void sendDailyReportForShop(Long shopId) {
-        String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
-        String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null ? System.getenv("SPRING_SENDGRID_FROM") : "noreply@innotewo.com";
+        String apiKey = System.getenv("BREVO_API_KEY");
+        String fromEmail = System.getenv("BREVO_FROM") != null ? System.getenv("BREVO_FROM") : "bizimungu2004@gmail.com";
         String ccEmail = System.getenv("SPRING_REPORT_TO") != null ? System.getenv("SPRING_REPORT_TO") : "bizimungu2004@gmail.com";
 
         LocalDate yesterday = LocalDate.now().minusDays(1);
@@ -135,7 +105,45 @@ public class DailyReportService {
         String dateStr = yesterday.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
 
         shopRepository.findById(shopId).ifPresent(shop ->
-                sendShopReport(shop, sendGridApiKey, fromEmail, ccEmail, start, end, dateStr));
+                sendShopReport(shop, apiKey, fromEmail, ccEmail, start, end, dateStr));
+    }
+
+    private void sendBrevoEmail(String apiKey, String fromEmail, String toEmail,
+                                String ccEmail, String subject, String html) {
+        try {
+            URL url = new URL("https://api.brevo.com/v3/smtp/email");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("accept", "application/json");
+            conn.setRequestProperty("content-type", "application/json");
+            conn.setRequestProperty("api-key", apiKey);
+            conn.setDoOutput(true);
+
+            // Build CC part only if different from recipient
+            String ccPart = "";
+            if (ccEmail != null && !ccEmail.equalsIgnoreCase(toEmail)) {
+                ccPart = ",\"cc\":[{\"email\":\"" + ccEmail + "\"}]";
+            }
+
+            String jsonBody = "{"
+                    + "\"sender\":{\"email\":\"" + fromEmail + "\",\"name\":\"BizTrack\"}"
+                    + ",\"to\":[{\"email\":\"" + toEmail + "\"}]"
+                    + ccPart
+                    + ",\"subject\":\"" + subject + "\""
+                    + ",\"htmlContent\":\"" + html.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "").replace("\r", "") + "\""
+                    + "}";
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            int responseCode = conn.getResponseCode();
+            System.out.println("Brevo email sent to " + toEmail + " — Status: " + responseCode);
+            conn.disconnect();
+
+        } catch (Exception e) {
+            System.err.println("Failed to send Brevo email: " + e.getMessage());
+        }
     }
 
     private String buildHtml(String shopName, String date, int salesCount, double revenue, double profit,
@@ -159,7 +167,7 @@ public class DailyReportService {
 
         StringBuilder lowStockHtml = new StringBuilder();
         if (lowStock.isEmpty()) {
-            lowStockHtml.append("<p style='color:#16a34a;font-size:13px;'>✅ All products are well stocked.</p>");
+            lowStockHtml.append("<p style='color:#16a34a;font-size:13px;'>All products are well stocked.</p>");
         } else {
             for (Product p : lowStock) {
                 lowStockHtml.append(String.format(
@@ -174,7 +182,7 @@ public class DailyReportService {
         return "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;'>" +
                 "<div style='max-width:600px;margin:20px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;'>" +
                 "<div style='background:linear-gradient(135deg,#3b82f6,#06b6d4);padding:30px;text-align:center;'>" +
-                "<h1 style='color:white;margin:0;font-size:22px;'>📊 BizTrack Daily Report</h1>" +
+                "<h1 style='color:white;margin:0;font-size:22px;'>BizTrack Daily Report</h1>" +
                 "<p style='color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:15px;font-weight:600;'>" + shopName + "</p>" +
                 "<p style='color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px;'>" + date + "</p>" +
                 "</div>" +
@@ -204,16 +212,16 @@ public class DailyReportService {
                 "</div>" +
                 "</div>" +
                 "<div style='margin-bottom:24px;'>" +
-                "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>🏆 Top Selling Products</h3>" +
+                "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>Top Selling Products</h3>" +
                 topProductsHtml +
                 "</div>" +
                 "<div style='margin-bottom:24px;'>" +
-                "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>⚠️ Low Stock Alerts</h3>" +
+                "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>Low Stock Alerts</h3>" +
                 lowStockHtml +
                 "</div>" +
                 "</div>" +
                 "<div style='background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;'>" +
-                "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by INNOTEWO INC LTD · Kigali, Rwanda</p>" +
+                "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by INNOTEWO INC LTD - Kigali, Rwanda</p>" +
                 "</div>" +
                 "</div></body></html>";
     }

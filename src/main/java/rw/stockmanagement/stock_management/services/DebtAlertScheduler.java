@@ -1,9 +1,5 @@
 package rw.stockmanagement.stock_management.services;
 
-import com.sendgrid.*;
-import com.sendgrid.helpers.mail.Mail;
-import com.sendgrid.helpers.mail.objects.Content;
-import com.sendgrid.helpers.mail.objects.Email;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -11,7 +7,10 @@ import rw.stockmanagement.stock_management.models.Debt;
 import rw.stockmanagement.stock_management.repositories.DebtRepository;
 import rw.stockmanagement.stock_management.repositories.ShopRepository;
 
-import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -24,19 +23,17 @@ public class DebtAlertScheduler {
     private final DebtRepository debtRepository;
     private final ShopRepository shopRepository;
 
-    // Runs at 8AM Rwanda time (6AM UTC) every day
-    @Scheduled(cron = "0 0 6 * * *", zone = "UTC")
+    @Scheduled(cron = "0 0 6 * * *", zone = "UTC") // 8AM Rwanda time
     public void sendDebtAlerts() {
-        String sendGridApiKey = System.getenv("SPRING_SENDGRID_KEY");
-        String fromEmail = System.getenv("SPRING_SENDGRID_FROM") != null
-                ? System.getenv("SPRING_SENDGRID_FROM") : "bizimungu2004@gmail.com";
+        String apiKey = System.getenv("BREVO_API_KEY");
+        String fromEmail = System.getenv("BREVO_FROM") != null
+                ? System.getenv("BREVO_FROM") : "bizimungu2004@gmail.com";
 
         LocalDate tomorrow = LocalDate.now().plusDays(1);
         List<Debt> debtsDueTomorrow = debtRepository.findDebtsDueTomorrow(tomorrow);
 
         if (debtsDueTomorrow.isEmpty()) return;
 
-        // Group debts by shop
         Map<Long, List<Debt>> debtsByShop = debtsDueTomorrow.stream()
                 .collect(Collectors.groupingBy(d -> d.getShop().getId()));
 
@@ -49,27 +46,42 @@ public class DebtAlertScheduler {
                 if (ownerEmail == null || ownerEmail.isEmpty()) return;
 
                 String html = buildAlertHtml(shop.getName(), shopDebts, tomorrow.toString());
+                String subject = "BizTrack Debt Alert - " + shopDebts.size() + " debt(s) due tomorrow";
 
-                try {
-                    Email from = new Email(fromEmail, "BizTrack");
-                    Email to = new Email(ownerEmail);
-                    Content content = new Content("text/html", html);
-                    Mail mail = new Mail(from,
-                            "⚠️ BizTrack Debt Alert — " + shopDebts.size() + " debt(s) due tomorrow",
-                            to, content);
-
-                    SendGrid sg = new SendGrid(sendGridApiKey);
-                    Request request = new Request();
-                    request.setMethod(Method.POST);
-                    request.setEndpoint("mail/send");
-                    request.setBody(mail.build());
-                    sg.api(request);
-
-                    System.out.println("Debt alert sent to " + shop.getName() + " (" + ownerEmail + ")");
-                } catch (IOException e) {
-                    System.err.println("Failed to send debt alert: " + e.getMessage());
-                }
+                sendBrevoEmail(apiKey, fromEmail, ownerEmail, subject, html);
+                System.out.println("Debt alert sent to " + shop.getName() + " (" + ownerEmail + ")");
             });
+        }
+    }
+
+    private void sendBrevoEmail(String apiKey, String fromEmail, String toEmail,
+                                String subject, String html) {
+        try {
+            URL url = new URL("https://api.brevo.com/v3/smtp/email");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("accept", "application/json");
+            conn.setRequestProperty("content-type", "application/json");
+            conn.setRequestProperty("api-key", apiKey);
+            conn.setDoOutput(true);
+
+            String jsonBody = "{"
+                    + "\"sender\":{\"email\":\"" + fromEmail + "\",\"name\":\"BizTrack\"}"
+                    + ",\"to\":[{\"email\":\"" + toEmail + "\"}]"
+                    + ",\"subject\":\"" + subject + "\""
+                    + ",\"htmlContent\":\"" + html.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "").replace("\r", "") + "\""
+                    + "}";
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            int responseCode = conn.getResponseCode();
+            System.out.println("Brevo debt alert sent to " + toEmail + " — Status: " + responseCode);
+            conn.disconnect();
+
+        } catch (Exception e) {
+            System.err.println("Failed to send Brevo debt alert: " + e.getMessage());
         }
     }
 
@@ -90,7 +102,7 @@ public class DebtAlertScheduler {
                             "</div>" +
                             "</div>",
                     d.getName(), typeColor, typeLabel,
-                    d.getNote() != null ? d.getNote() : "—",
+                    d.getNote() != null ? d.getNote() : "-",
                     d.getRemainingAmount()
             ));
         }
@@ -98,7 +110,7 @@ public class DebtAlertScheduler {
         return "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;'>" +
                 "<div style='max-width:600px;margin:20px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;'>" +
                 "<div style='background:linear-gradient(135deg,#ef4444,#f97316);padding:30px;text-align:center;'>" +
-                "<h1 style='color:white;margin:0;font-size:22px;'>⚠️ Debt Due Tomorrow</h1>" +
+                "<h1 style='color:white;margin:0;font-size:22px;'>Debt Due Tomorrow</h1>" +
                 "<p style='color:rgba(255,255,255,0.85);margin:4px 0 0;font-size:15px;font-weight:600;'>" + shopName + "</p>" +
                 "<p style='color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px;'>Due Date: " + dueDate + "</p>" +
                 "</div>" +
@@ -107,7 +119,7 @@ public class DebtAlertScheduler {
                 rows +
                 "</div>" +
                 "<div style='background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;'>" +
-                "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by INNOTEWO INC LTD · Kigali, Rwanda</p>" +
+                "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by INNOTEWO INC LTD - Kigali, Rwanda</p>" +
                 "</div>" +
                 "</div></body></html>";
     }
