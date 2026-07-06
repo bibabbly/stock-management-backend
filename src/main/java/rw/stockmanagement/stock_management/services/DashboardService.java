@@ -26,26 +26,44 @@ public class DashboardService {
         LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
         LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
 
+        // Today metrics
         double todayRevenue = saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
-        double monthRevenue = saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfMonth, endOfDay);
-        long todaySalesCount = saleRepository.countByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
         double todayPurchaseCost = saleRepository.sumPurchaseCostByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
+        long todaySalesCount = saleRepository.countByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
+
+        // Month metrics
+        double monthRevenue = saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfMonth, endOfDay);
         double monthPurchaseCost = saleRepository.sumPurchaseCostByShopIdAndDateBetween(shopId, startOfMonth, endOfDay);
 
+        // Products — single query, reused for everything
+        List<Product> allProducts = productRepository.findByShopId(shopId);
         List<Product> lowStockProducts = productRepository.findByShopIdAndQuantityLessThanEqualMinStock(shopId);
-        long totalProducts = productRepository.countByShopId(shopId);
+
+        // Stock values calculated in memory — no extra DB query needed
+        double stockValueAtCost = allProducts.stream()
+                .mapToDouble(p -> (p.getBuyingPrice() != null ? p.getBuyingPrice() : 0.0) * p.getQuantity())
+                .sum();
+
+        double stockValueAtSale = allProducts.stream()
+                .mapToDouble(p -> (p.getSellingPrice() != null ? p.getSellingPrice() : 0.0) * p.getQuantity())
+                .sum();
+
+        long totalProducts = allProducts.size();
         long totalSuppliers = supplierRepository.countByShopId(shopId);
 
+        // Build response
         dashboard.put("todayRevenue", todayRevenue);
-        dashboard.put("monthRevenue", monthRevenue);
+        dashboard.put("todayProfit", todayRevenue - todayPurchaseCost);
         dashboard.put("todaySalesCount", todaySalesCount);
-        dashboard.put("lowStockProducts", lowStockProducts);
-        dashboard.put("lowStockCount", lowStockProducts.size());
-        dashboard.put("totalProducts", totalProducts);
-        dashboard.put("totalSuppliers", totalSuppliers);
+        dashboard.put("monthRevenue", monthRevenue);
         dashboard.put("monthPurchaseCost", monthPurchaseCost);
         dashboard.put("monthProfit", monthRevenue - monthPurchaseCost);
-        dashboard.put("todayProfit", todayRevenue - todayPurchaseCost);
+        dashboard.put("totalProducts", totalProducts);
+        dashboard.put("totalSuppliers", totalSuppliers);
+        dashboard.put("stockValueAtCost", stockValueAtCost);
+        dashboard.put("stockValueAtSale", stockValueAtSale);
+        dashboard.put("lowStockProducts", lowStockProducts);
+        dashboard.put("lowStockCount", lowStockProducts.size());
 
         return dashboard;
     }
