@@ -81,4 +81,46 @@ public class StockMovementService {
 
         return stockMovementRepository.save(movement);
     }
+
+    @Transactional
+    public StockMovement manualStockOut(Long shopId, Long productId, Integer quantity,
+                                        String reason, Long userId) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new RuntimeException("Reason is mandatory for manual stock out");
+        }
+
+        Shop shop = shopRepository.findById(shopId)
+                .orElseThrow(() -> new RuntimeException("Shop not found"));
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+
+        if (product.getQuantity() < quantity) {
+            throw new RuntimeException(
+                    "Insufficient stock. Available: " + product.getQuantity());
+        }
+
+        // Reduce stock
+        product.setQuantity(product.getQuantity() - quantity);
+
+        // Auto deactivate if stock reaches 0
+        if (product.getQuantity() == 0) {
+            product.setActive(false);
+        }
+
+        productRepository.save(product);
+
+        StockMovement movement = new StockMovement();
+        movement.setShop(shop);
+        movement.setProduct(product);
+        movement.setType(StockMovement.MovementType.OUT);
+        movement.setQuantity(quantity);
+        movement.setNote(reason);
+
+        if (userId != null) {
+            userRepository.findById(userId).ifPresent(movement::setUser);
+        }
+
+        return stockMovementRepository.save(movement);
+    }
 }

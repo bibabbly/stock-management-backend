@@ -9,6 +9,7 @@ import rw.stockmanagement.stock_management.models.Product;
 import rw.stockmanagement.stock_management.services.ProductService;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/products")
@@ -25,6 +26,12 @@ public class ProductController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "") String search) {
         return ResponseEntity.ok(productService.getAllProducts(shopId, page, size, search));
+    }
+
+    // Only active products — for sale modal and restock modal
+    @GetMapping("/shop/{shopId}/active")
+    public ResponseEntity<List<Product>> getActiveProducts(@PathVariable Long shopId) {
+        return ResponseEntity.ok(productService.getActiveProducts(shopId));
     }
 
     @GetMapping("/{id}")
@@ -44,9 +51,29 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteProduct(@PathVariable Long id) {
-        productService.deleteProduct(id);
-        return ResponseEntity.ok("Product deleted successfully");
+    public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
+        try {
+            productService.deleteProduct(id);
+            return ResponseEntity.ok(Map.of("message", "Product deactivated successfully"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // Deactivate product
+    @PutMapping("/{id}/deactivate")
+    public ResponseEntity<?> deactivateProduct(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(productService.deactivateProduct(id));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // Reactivate product
+    @PutMapping("/{id}/reactivate")
+    public ResponseEntity<?> reactivateProduct(@PathVariable Long id) {
+        return ResponseEntity.ok(productService.reactivateProduct(id));
     }
 
     @GetMapping("/low-stock/{shopId}")

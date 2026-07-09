@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import rw.stockmanagement.stock_management.dto.ProductDTO;
 import rw.stockmanagement.stock_management.models.Product;
 import rw.stockmanagement.stock_management.models.Shop;
@@ -19,7 +20,6 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ShopRepository shopRepository;
 
-    // Get all products by shop — paginated + search
     public Page<Product> getAllProducts(Long shopId, int page, int size, String search) {
         Pageable pageable = PageRequest.of(page, size);
         if (search != null && !search.isEmpty()) {
@@ -30,13 +30,16 @@ public class ProductService {
         return productRepository.findByShopId(shopId, pageable);
     }
 
-    // Get single product
+    // Get only ACTIVE products — for sale modal and restock modal
+    public List<Product> getActiveProducts(Long shopId) {
+        return productRepository.findByShopIdAndActiveTrue(shopId);
+    }
+
     public Product getProduct(Long id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
     }
 
-    // Create product
     public Product createProduct(ProductDTO dto) {
         Shop shop = shopRepository.findById(dto.getShopId())
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
@@ -51,11 +54,11 @@ public class ProductService {
         product.setSellingPrice(dto.getSellingPrice());
         product.setQuantity(dto.getQuantity());
         product.setMinStock(dto.getMinStock());
+        product.setActive(true);
 
         return productRepository.save(product);
     }
 
-    // Update product
     public Product updateProduct(Long id, ProductDTO dto) {
         Product product = getProduct(id);
         product.setName(dto.getName());
@@ -70,12 +73,38 @@ public class ProductService {
         return productRepository.save(product);
     }
 
-    // Delete product
-    public void deleteProduct(Long id) {
-        productRepository.deleteById(id);
+    // Deactivate — only if quantity = 0
+    @Transactional
+    public Product deactivateProduct(Long id) {
+        Product product = getProduct(id);
+        if (product.getQuantity() != null && product.getQuantity() > 0) {
+            throw new RuntimeException(
+                    "Cannot deactivate product with stock remaining. Current stock: " + product.getQuantity() +
+                            ". Please do a manual stock out first.");
+        }
+        product.setActive(false);
+        return productRepository.save(product);
     }
 
-    // Get low stock products
+    // Reactivate anytime
+    @Transactional
+    public Product reactivateProduct(Long id) {
+        Product product = getProduct(id);
+        product.setActive(true);
+        return productRepository.save(product);
+    }
+
+    // Delete — blocked, use deactivate instead
+    public void deleteProduct(Long id) {
+        Product product = getProduct(id);
+        if (product.getQuantity() != null && product.getQuantity() > 0) {
+            throw new RuntimeException("Cannot delete product with stock remaining.");
+        }
+        // Instead of deleting, deactivate
+        product.setActive(false);
+        productRepository.save(product);
+    }
+
     public List<Product> getLowStockProducts(Long shopId) {
         return productRepository.findByShopIdAndQuantityLessThan(shopId, 10);
     }

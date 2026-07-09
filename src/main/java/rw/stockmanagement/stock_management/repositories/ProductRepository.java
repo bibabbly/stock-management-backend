@@ -16,4 +16,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE p.shop.id = :shopId AND p.quantity <= p.minStock")
     List<Product> findByShopIdAndQuantityLessThanEqualMinStock(@Param("shopId") Long shopId);
     long countByShopId(Long shopId);
+    // Add this to existing ProductRepository
+    List<Product> findByShopIdAndActiveTrue(Long shopId);
 }

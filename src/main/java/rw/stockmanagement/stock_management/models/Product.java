@@ -35,11 +35,15 @@ public class Product {
     @Column(name = "min_stock")
     private Integer minStock;
 
+    @Column(name = "active")
+    private Boolean active = true;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        if (active == null) active = true;
     }
 }

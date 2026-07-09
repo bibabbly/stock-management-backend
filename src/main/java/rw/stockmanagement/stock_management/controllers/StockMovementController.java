@@ -8,6 +8,7 @@ import rw.stockmanagement.stock_management.dto.StockMovementDTO;
 import rw.stockmanagement.stock_management.models.StockMovement;
 import rw.stockmanagement.stock_management.services.StockMovementService;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/stock-movements")
@@ -42,5 +43,23 @@ public class StockMovementController {
         return ResponseEntity.ok(stockMovementService.restockFromSupplier(
                 dto.getShopId(), dto.getProductId(), dto.getSupplierId(),
                 dto.getQuantity(), dto.getNote(), dto.getUserId()));
+    }
+
+
+    @PostMapping("/manual-out")
+    public ResponseEntity<?> manualStockOut(@RequestBody Map<String, Object> body) {
+        try {
+            Long shopId = Long.valueOf(body.get("shopId").toString());
+            Long productId = Long.valueOf(body.get("productId").toString());
+            Integer quantity = Integer.valueOf(body.get("quantity").toString());
+            String reason = body.get("reason").toString();
+            Long userId = body.get("userId") != null ? Long.valueOf(body.get("userId").toString()) : null;
+
+            StockMovement movement = stockMovementService.manualStockOut(
+                    shopId, productId, quantity, reason, userId);
+            return ResponseEntity.ok(movement);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 }
