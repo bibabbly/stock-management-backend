@@ -56,6 +56,7 @@ public class StockMovementService {
     }
 
     @Transactional
+
     public StockMovement restockFromSupplier(Long shopId, Long productId, Long supplierId,
                                              Integer quantity, String note, Long userId) {
         Shop shop = shopRepository.findById(shopId)
@@ -63,9 +64,6 @@ public class StockMovementService {
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
-
-        supplierRepository.findById(supplierId)
-                .orElseThrow(() -> new RuntimeException("Supplier not found"));
 
         product.setQuantity(product.getQuantity() + quantity);
         productRepository.save(product);
@@ -75,7 +73,7 @@ public class StockMovementService {
         movement.setProduct(product);
         movement.setType(StockMovement.MovementType.IN);
         movement.setQuantity(quantity);
-        movement.setNote(note != null ? note : "Restock from supplier");
+        movement.setNote(note != null && !note.isEmpty() ? note : "Direct Restock");
 
         if (userId != null) {
             userRepository.findById(userId).ifPresent(movement::setUser);
