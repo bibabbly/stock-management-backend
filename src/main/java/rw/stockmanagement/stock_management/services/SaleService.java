@@ -36,10 +36,9 @@ public class SaleService {
     public Page<Sale> getAllSalesPaged(Long shopId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
 
-        // Step 1: fast paginated query — no JOIN FETCH, just IDs and count
-        Page<Sale> salesPage = saleRepository.findByShopIdOrderByDateDesc(shopId, pageable);
+        Page<Sale> salesPage = saleRepository.findByShopIdAndStatusOrderByDateDesc(
+                shopId, Sale.SaleStatus.COMPLETED, pageable);
 
-        // Step 2: fetch full details only for this page's IDs
         List<Long> ids = salesPage.getContent().stream()
                 .map(Sale::getId)
                 .collect(Collectors.toList());
@@ -48,7 +47,6 @@ public class SaleService {
                 ? Collections.emptyList()
                 : saleRepository.findByIdsWithDetails(ids);
 
-        // Return as Page with original pagination metadata
         return new PageImpl<>(salesWithDetails, pageable, salesPage.getTotalElements());
     }
 
@@ -156,4 +154,69 @@ public class SaleService {
         return saleRepository.findByShopIdAndDateBetweenOptimized(shopId, start, end);
     }
     //Task
+
+    @Transactional
+    public Sale cancelSale(Long saleId, Long cancelledByUserId, String reason) {
+        Sale sale = saleRepository.findById(saleId)
+                .orElseThrow(() -> new RuntimeException("Sale not found"));
+
+        // Already cancelled
+        if (sale.getStatus() == Sale.SaleStatus.CANCELLED) {
+            throw new RuntimeException("Sale is already cancelled");
+        }
+
+        // Same day only check
+        if (!sale.getDate().toLocalDate().equals(java.time.LocalDate.now())) {
+            throw new RuntimeException("Sale can only be cancelled on the same day it was made");
+        }
+
+        User cancelledBy = userRepository.findById(cancelledByUserId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Restore stock for each item
+        List<Product> updatedProducts = new ArrayList<>();
+        List<StockMovement> movements = new ArrayList<>();
+
+        for (SaleItem item : sale.getItems()) {
+            Product product = item.getProduct();
+            product.setQuantity(product.getQuantity() + item.getQuantity());
+            updatedProducts.add(product);
+
+            // Record stock movement IN for the return
+            StockMovement movement = new StockMovement();
+            movement.setShop(sale.getShop());
+            movement.setProduct(product);
+            movement.setType(StockMovement.MovementType.IN);
+            movement.setQuantity(item.getQuantity());
+            movement.setNote("Sale cancelled - #" + sale.getId());
+            movements.add(movement);
+        }
+
+        productRepository.saveAll(updatedProducts);
+        stockMovementRepository.saveAll(movements);
+
+        // Mark as cancelled
+        sale.setStatus(Sale.SaleStatus.CANCELLED);
+        sale.setCancelledBy(cancelledBy);
+        sale.setCancelledAt(LocalDateTime.now());
+        sale.setCancelReason(reason);
+
+        return saleRepository.save(sale);
+    }
+
+    public Page<Sale> getCancelledSalesPaged(Long shopId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Sale> salesPage = saleRepository.findByShopIdAndStatusOrderByDateDesc(
+                shopId, Sale.SaleStatus.CANCELLED, pageable);
+
+        List<Long> ids = salesPage.getContent().stream()
+                .map(Sale::getId)
+                .collect(Collectors.toList());
+
+        List<Sale> salesWithDetails = ids.isEmpty()
+                ? Collections.emptyList()
+                : saleRepository.findByIdsWithDetails(ids);
+
+        return new PageImpl<>(salesWithDetails, pageable, salesPage.getTotalElements());
+    }
 }

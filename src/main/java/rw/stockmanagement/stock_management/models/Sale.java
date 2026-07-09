@@ -25,13 +25,13 @@ public class Sale {
     private User user;
 
     @Column(name = "original_amount")
-    private Double originalAmount; // sum of all item subtotals
+    private Double originalAmount;
 
     @Column(name = "discount_amount")
-    private Double discountAmount; // sum of all item discountAmounts
+    private Double discountAmount;
 
     @Column(name = "total_amount")
-    private Double totalAmount; // originalAmount - discountAmount
+    private Double totalAmount;
 
     @Column(name = "payment_method")
     private String paymentMethod;
@@ -47,8 +47,28 @@ public class Sale {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime date;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private SaleStatus status = SaleStatus.COMPLETED;
+
+    @ManyToOne
+    @JoinColumn(name = "cancelled_by_id")
+    private User cancelledBy;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
     @PrePersist
     protected void onCreate() {
         date = LocalDateTime.now();
+        if (status == null) status = SaleStatus.COMPLETED;
+    }
+
+    public enum SaleStatus {
+        COMPLETED, CANCELLED
     }
 }

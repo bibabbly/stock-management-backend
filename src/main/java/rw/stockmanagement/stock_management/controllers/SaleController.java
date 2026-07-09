@@ -10,6 +10,7 @@ import rw.stockmanagement.stock_management.services.SaleService;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sales")
@@ -54,5 +55,27 @@ public class SaleController {
         LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
         LocalDateTime end = LocalDateTime.parse(endDate + "T23:59:59");
         return ResponseEntity.ok(saleService.getSalesByDateRange(shopId, start, end));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<?> cancelSale(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        try {
+            Long cancelledByUserId = Long.valueOf(body.get("userId").toString());
+            String reason = body.getOrDefault("reason", "No reason provided").toString();
+            Sale cancelled = saleService.cancelSale(id, cancelledByUserId, reason);
+            return ResponseEntity.ok(cancelled);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/shop/{shopId}/cancelled")
+    public ResponseEntity<?> getCancelledSales(
+            @PathVariable Long shopId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(saleService.getCancelledSalesPaged(shopId, page, size));
     }
 }

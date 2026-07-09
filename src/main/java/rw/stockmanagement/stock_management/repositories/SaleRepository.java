@@ -40,4 +40,11 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
 
     @Query("SELECT COALESCE(SUM(si.quantity * si.product.buyingPrice), 0) FROM SaleItem si WHERE si.sale.shop.id = :shopId AND si.sale.date BETWEEN :start AND :end")
     double sumPurchaseCostByShopIdAndDateBetween(@Param("shopId") Long shopId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // Paginated by status
+    Page<Sale> findByShopIdAndStatusOrderByDateDesc(Long shopId, Sale.SaleStatus status, Pageable pageable);
+
+    // All sales unpaged for reports — only completed
+    @Query("SELECT DISTINCT s FROM Sale s LEFT JOIN FETCH s.items i LEFT JOIN FETCH i.product LEFT JOIN FETCH s.user LEFT JOIN FETCH s.supplier WHERE s.shop.id = :shopId AND s.status = 'COMPLETED' ORDER BY s.date DESC")
+    List<Sale> findCompletedByShopId(@Param("shopId") Long shopId);
 }
