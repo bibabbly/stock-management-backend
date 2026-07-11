@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -218,5 +219,21 @@ public class SaleService {
                 : saleRepository.findByIdsWithDetails(ids);
 
         return new PageImpl<>(salesWithDetails, pageable, salesPage.getTotalElements());
+    }
+
+
+    public List<Map<String, Object>> getCashDeskReport(Long shopId, LocalDateTime start, LocalDateTime end) {
+        List<Object[]> raw = saleRepository.getCashDeskReport(shopId, start, end);
+        return raw.stream().map(row -> {
+            Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("userId", row[0]);
+            item.put("userName", row[1]);
+            item.put("salesCount", row[2]);
+            item.put("totalRevenue", row[3]);
+            item.put("cashAmount", row[4]);
+            item.put("momoAmount", row[5]);
+            item.put("bankAmount", row[6]);
+            return item;
+        }).collect(java.util.stream.Collectors.toList());
     }
 }

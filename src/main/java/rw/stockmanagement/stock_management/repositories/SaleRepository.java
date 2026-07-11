@@ -49,4 +49,18 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
     // All completed sales unpaged
     @Query("SELECT DISTINCT s FROM Sale s LEFT JOIN FETCH s.items i LEFT JOIN FETCH i.product LEFT JOIN FETCH s.user LEFT JOIN FETCH s.supplier WHERE s.shop.id = :shopId AND s.status = 'COMPLETED' ORDER BY s.date DESC")
     List<Sale> findCompletedByShopId(@Param("shopId") Long shopId);
+
+    // Cash desk report — sales per user for date range
+    @Query("SELECT s.user.id, s.user.name, COUNT(s), SUM(s.totalAmount), " +
+            "SUM(CASE WHEN s.paymentMethod = 'CASH' THEN s.totalAmount ELSE 0 END), " +
+            "SUM(CASE WHEN s.paymentMethod = 'MOMO' THEN s.totalAmount ELSE 0 END), " +
+            "SUM(CASE WHEN s.paymentMethod = 'BANK' THEN s.totalAmount ELSE 0 END) " +
+            "FROM Sale s WHERE s.shop.id = :shopId " +
+            "AND s.date BETWEEN :start AND :end " +
+            "AND s.status = 'COMPLETED' " +
+            "AND s.user IS NOT NULL " +
+            "GROUP BY s.user.id, s.user.name ORDER BY SUM(s.totalAmount) DESC")
+    List<Object[]> getCashDeskReport(@Param("shopId") Long shopId,
+                                     @Param("start") LocalDateTime start,
+                                     @Param("end") LocalDateTime end);
 }

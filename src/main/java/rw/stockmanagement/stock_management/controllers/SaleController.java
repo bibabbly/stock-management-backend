@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import rw.stockmanagement.stock_management.dto.SaleDTO;
 import rw.stockmanagement.stock_management.models.Sale;
+import rw.stockmanagement.stock_management.repositories.SaleRepository;
 import rw.stockmanagement.stock_management.services.SaleService;
 
 import java.time.LocalDateTime;
@@ -78,4 +79,15 @@ public class SaleController {
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(saleService.getCancelledSalesPaged(shopId, page, size));
     }
+
+    @GetMapping("/shop/{shopId}/cash-desk")
+    public ResponseEntity<?> getCashDeskReport(
+            @PathVariable Long shopId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end = LocalDateTime.parse(endDate + "T23:59:59");
+        return ResponseEntity.ok(saleService.getCashDeskReport(shopId, start, end));
+    }
+
 }
