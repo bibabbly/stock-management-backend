@@ -19,12 +19,15 @@ public class StockMovementService {
     private final ShopRepository shopRepository;
     private final SupplierRepository supplierRepository;
     private final UserRepository userRepository;
+    private final ProductStockRepository productStockRepository;
+    private final StockLocationRepository stockLocationRepository;
 
     public List<StockMovement> getAllMovements(Long shopId) {
         return stockMovementRepository.findByShopId(shopId);
     }
 
-    public Page<StockMovement> getAllMovementsPaged(Long shopId, int page, int size, String type, String search) {
+    public Page<StockMovement> getAllMovementsPaged(Long shopId, int page, int size,
+                                                    String type, String search) {
         Pageable pageable = PageRequest.of(page, size);
         boolean hasSearch = search != null && !search.isEmpty();
         boolean hasType = type != null && !type.equals("ALL");
@@ -56,18 +59,48 @@ public class StockMovementService {
     }
 
     @Transactional
-
     public StockMovement restockFromSupplier(Long shopId, Long productId, Long supplierId,
                                              Integer quantity, String note, Long userId) {
+        if (quantity == null || quantity <= 0) {
+            throw new RuntimeException("Quantity must be greater than zero");
+        }
+
         Shop shop = shopRepository.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        product.setQuantity(product.getQuantity() + quantity);
+        // Get main location for this shop
+        StockLocation mainLocation = stockLocationRepository
+                .findByShopIdAndIsMainTrue(shopId)
+                .orElse(null);
+
+        if (mainLocation != null) {
+            // Update product_stock for main location
+            ProductStock productStock = productStockRepository
+                    .findByProductIdAndLocationId(productId, mainLocation.getId())
+                    .orElseGet(() -> {
+                        ProductStock ps = new ProductStock();
+                        ps.setProduct(product);
+                        ps.setLocation(mainLocation);
+                        ps.setQuantity(0);
+                        return ps;
+                    });
+            productStock.setQuantity(productStock.getQuantity() + quantity);
+            productStockRepository.save(productStock);
+
+            // Sync products.quantity with total across all locations
+            Integer total = productStockRepository.getTotalQuantityByProductId(productId);
+            product.setQuantity(total != null ? total : 0);
+        } else {
+            // Fallback — no location found, update products.quantity directly
+            product.setQuantity(product.getQuantity() + quantity);
+        }
+
         productRepository.save(product);
 
+        // Record stock movement
         StockMovement movement = new StockMovement();
         movement.setShop(shop);
         movement.setProduct(product);
@@ -89,27 +122,58 @@ public class StockMovementService {
             throw new RuntimeException("Reason is mandatory for manual stock out");
         }
 
+        if (quantity == null || quantity <= 0) {
+            throw new RuntimeException("Quantity must be greater than zero");
+        }
+
         Shop shop = shopRepository.findById(shopId)
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        if (product.getQuantity() < quantity) {
+        // Check total stock across all locations
+        Integer totalStock = productStockRepository.getTotalQuantityByProductId(productId);
+        int currentTotal = totalStock != null ? totalStock : product.getQuantity();
+
+        if (currentTotal < quantity) {
             throw new RuntimeException(
-                    "Insufficient stock. Available: " + product.getQuantity());
+                    "Insufficient stock. Available: " + currentTotal);
         }
 
-        // Reduce stock
-        product.setQuantity(product.getQuantity() - quantity);
+        // Deduct from main location first
+        StockLocation mainLocation = stockLocationRepository
+                .findByShopIdAndIsMainTrue(shopId)
+                .orElse(null);
 
-        // Auto deactivate if stock reaches 0
+        if (mainLocation != null) {
+            ProductStock productStock = productStockRepository
+                    .findByProductIdAndLocationId(productId, mainLocation.getId())
+                    .orElse(null);
+
+            if (productStock != null) {
+                int newQty = productStock.getQuantity() - quantity;
+                if (newQty < 0) newQty = 0;
+                productStock.setQuantity(newQty);
+                productStockRepository.save(productStock);
+            }
+
+            // Sync products.quantity
+            Integer total = productStockRepository.getTotalQuantityByProductId(productId);
+            product.setQuantity(total != null ? total : 0);
+        } else {
+            // Fallback
+            product.setQuantity(Math.max(0, product.getQuantity() - quantity));
+        }
+
+        // Auto deactivate if total stock reaches 0
         if (product.getQuantity() == 0) {
             product.setActive(false);
         }
 
         productRepository.save(product);
 
+        // Record stock movement
         StockMovement movement = new StockMovement();
         movement.setShop(shop);
         movement.setProduct(product);

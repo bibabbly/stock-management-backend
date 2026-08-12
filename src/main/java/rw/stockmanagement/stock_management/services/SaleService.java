@@ -11,11 +11,9 @@ import rw.stockmanagement.stock_management.dto.SaleDTO;
 import rw.stockmanagement.stock_management.models.*;
 import rw.stockmanagement.stock_management.repositories.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,20 +21,17 @@ import java.util.stream.Collectors;
 public class SaleService {
 
     private final SaleRepository saleRepository;
-    private final SaleItemRepository saleItemRepository;
     private final ProductRepository productRepository;
     private final ShopRepository shopRepository;
-    private final UserRepository userRepository;
-    private final StockMovementRepository stockMovementRepository;
     private final SupplierRepository supplierRepository;
-
-    public List<Sale> getAllSales(Long shopId) {
-        return saleRepository.findByShopId(shopId, Pageable.unpaged());
-    }
+    private final UserRepository userRepository;
+    private final SaleItemRepository saleItemRepository;
+    private final StockMovementRepository stockMovementRepository;
+    private final ProductStockRepository productStockRepository;
+    private final StockLocationRepository stockLocationRepository;
 
     public Page<Sale> getAllSalesPaged(Long shopId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-
         Page<Sale> salesPage = saleRepository.findByShopIdAndStatusOrderByDateDesc(
                 shopId, Sale.SaleStatus.COMPLETED, pageable);
 
@@ -61,129 +56,203 @@ public class SaleService {
         Shop shop = shopRepository.findById(dto.getShopId())
                 .orElseThrow(() -> new RuntimeException("Shop not found"));
 
-        User user = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = null;
+        if (dto.getUserId() != null) {
+            user = userRepository.findById(dto.getUserId()).orElse(null);
+        }
+
+        Supplier supplier = null;
+        if (dto.getSupplierId() != null) {
+            supplier = supplierRepository.findById(dto.getSupplierId()).orElse(null);
+        }
+
+        // Get main location for stock deduction
+        StockLocation mainLocation = stockLocationRepository
+                .findByShopIdAndIsMainTrue(dto.getShopId())
+                .orElse(null);
 
         Sale sale = new Sale();
         sale.setShop(shop);
         sale.setUser(user);
+        sale.setSupplier(supplier);
         sale.setPaymentMethod(dto.getPaymentMethod());
+        sale.setStatus(Sale.SaleStatus.COMPLETED);
 
-        if (dto.getSupplierId() != null) {
-            supplierRepository.findById(dto.getSupplierId())
-                    .ifPresent(sale::setSupplier);
-        }
+        List<SaleItem> items = new ArrayList<>();
+        double originalAmount = 0;
+        double discountAmount = 0;
 
-        List<SaleItem> saleItems = new ArrayList<>();
-        List<Product> updatedProducts = new ArrayList<>();
-        List<StockMovement> movements = new ArrayList<>();
+        for (SaleDTO.SaleItemDTO itemDto : dto.getItems()) {
+            Product product = productRepository.findById(itemDto.getProductId())
+                    .orElseThrow(() -> new RuntimeException(
+                            "Product not found: " + itemDto.getProductId()));
 
-        double totalOriginal = 0.0;
-        double totalDiscount = 0.0;
+            int qty = itemDto.getQuantity();
+            double unitPrice = product.getSellingPrice();
+            double subtotal = unitPrice * qty;
 
-        for (SaleDTO.SaleItemDTO itemDTO : dto.getItems()) {
-            Product product = productRepository.findById(itemDTO.getProductId())
-                    .orElseThrow(() -> new RuntimeException("Product not found"));
+            // Calculate discount
+            double itemDiscountAmount = 0;
+            String discountType = null;
+            Double discountValue = null;
 
-            if (product.getQuantity() < itemDTO.getQuantity()) {
-                throw new RuntimeException(
-                        "Insufficient stock for: " + product.getName() +
-                                ". Available: " + product.getQuantity()
-                );
-            }
+            if (itemDto.getDiscountType() != null && itemDto.getDiscountValue() != null
+                    && itemDto.getDiscountValue() > 0) {
+                discountType = itemDto.getDiscountType();
+                discountValue = itemDto.getDiscountValue();
 
-            double subtotal = product.getSellingPrice() * itemDTO.getQuantity();
-
-            double itemDiscount = 0.0;
-            if (itemDTO.getDiscountType() != null && itemDTO.getDiscountValue() != null
-                    && itemDTO.getDiscountValue() > 0) {
-                if ("PERCENTAGE".equals(itemDTO.getDiscountType())) {
-                    itemDiscount = subtotal * (itemDTO.getDiscountValue() / 100.0);
-                } else if ("FIXED".equals(itemDTO.getDiscountType())) {
-                    itemDiscount = itemDTO.getDiscountValue();
+                if ("PERCENTAGE".equals(discountType)) {
+                    itemDiscountAmount = subtotal * (discountValue / 100);
+                } else if ("FIXED".equals(discountType)) {
+                    itemDiscountAmount = Math.min(discountValue, subtotal);
                 }
-                itemDiscount = Math.min(itemDiscount, subtotal);
             }
 
-            double finalSubtotal = subtotal - itemDiscount;
+            double finalSubtotal = subtotal - itemDiscountAmount;
+            originalAmount += subtotal;
+            discountAmount += itemDiscountAmount;
 
-            SaleItem saleItem = new SaleItem();
-            saleItem.setSale(sale);
-            saleItem.setProduct(product);
-            saleItem.setQuantity(itemDTO.getQuantity());
-            saleItem.setUnitPrice(product.getSellingPrice());
-            saleItem.setSubtotal(subtotal);
-            saleItem.setDiscountType(itemDTO.getDiscountType());
-            saleItem.setDiscountValue(itemDTO.getDiscountValue());
-            saleItem.setDiscountAmount(itemDiscount);
-            saleItem.setFinalSubtotal(finalSubtotal);
-            saleItems.add(saleItem);
+            // Deduct from product_stock main location if available
+            if (mainLocation != null) {
+                ProductStock productStock = productStockRepository
+                        .findByProductIdAndLocationId(product.getId(), mainLocation.getId())
+                        .orElse(null);
 
-            totalOriginal += subtotal;
-            totalDiscount += itemDiscount;
+                if (productStock != null) {
+                    int newQty = Math.max(0, productStock.getQuantity() - qty);
+                    productStock.setQuantity(newQty);
+                    productStockRepository.save(productStock);
+                }
 
-            product.setQuantity(product.getQuantity() - itemDTO.getQuantity());
-            updatedProducts.add(product);
+                // Sync products.quantity with total across all locations
+                Integer total = productStockRepository
+                        .getTotalQuantityByProductId(product.getId());
+                product.setQuantity(total != null ? total
+                        : Math.max(0, product.getQuantity() - qty));
+            } else {
+                // Fallback for shops without locations
+                product.setQuantity(Math.max(0, product.getQuantity() - qty));
+            }
 
+            productRepository.save(product);
+
+            // Record stock movement OUT
             StockMovement movement = new StockMovement();
             movement.setShop(shop);
             movement.setProduct(product);
             movement.setType(StockMovement.MovementType.OUT);
-            movement.setQuantity(itemDTO.getQuantity());
+            movement.setQuantity(qty);
             movement.setNote("Sale transaction");
-            movements.add(movement);
+            if (user != null) movement.setUser(user);
+            stockMovementRepository.save(movement);
+
+            // Build sale item
+            SaleItem saleItem = new SaleItem();
+            saleItem.setSale(sale);
+            saleItem.setProduct(product);
+            saleItem.setQuantity(qty);
+            saleItem.setUnitPrice(unitPrice);
+            saleItem.setSubtotal(subtotal);
+            saleItem.setDiscountType(discountType);
+            saleItem.setDiscountValue(discountValue);
+            saleItem.setDiscountAmount(itemDiscountAmount);
+            saleItem.setFinalSubtotal(finalSubtotal);
+            items.add(saleItem);
         }
 
-        sale.setOriginalAmount(totalOriginal);
-        sale.setDiscountAmount(totalDiscount);
-        sale.setTotalAmount(totalOriginal - totalDiscount);
-        sale.setItems(saleItems);
-
-        productRepository.saveAll(updatedProducts);
-        stockMovementRepository.saveAll(movements);
+        sale.setOriginalAmount(originalAmount);
+        sale.setDiscountAmount(discountAmount);
+        sale.setTotalAmount(originalAmount - discountAmount);
+        sale.setItems(items);
 
         return saleRepository.save(sale);
     }
 
-    public Double getTodayTotal(Long shopId) {
-        java.time.LocalDateTime startOfDay = java.time.LocalDate.now().atStartOfDay();
-        java.time.LocalDateTime endOfDay = java.time.LocalDate.now().atTime(23, 59, 59);
-        return saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, startOfDay, endOfDay);
+    public double getTodayTotal(Long shopId) {
+        LocalDateTime start = LocalDate.now().atStartOfDay();
+        LocalDateTime end = LocalDate.now().atTime(23, 59, 59);
+        return saleRepository.sumTotalAmountByShopIdAndDateBetween(shopId, start, end);
+    }
+
+    public List<Sale> getAllSales(Long shopId) {
+        return saleRepository.findCompletedByShopId(shopId);
     }
 
     public List<Sale> getSalesByDateRange(Long shopId, LocalDateTime start, LocalDateTime end) {
         return saleRepository.findByShopIdAndDateBetweenOptimized(shopId, start, end);
     }
-    //Task
+
+    public List<Map<String, Object>> getCashDeskReport(Long shopId,
+                                                       LocalDateTime start,
+                                                       LocalDateTime end) {
+        List<Object[]> raw = saleRepository.getCashDeskReport(shopId, start, end);
+        return raw.stream().map(row -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("userId", row[0]);
+            item.put("userName", row[1]);
+            item.put("salesCount", row[2]);
+            item.put("totalRevenue", row[3]);
+            item.put("cashAmount", row[4]);
+            item.put("momoAmount", row[5]);
+            item.put("bankAmount", row[6]);
+            return item;
+        }).collect(Collectors.toList());
+    }
 
     @Transactional
     public Sale cancelSale(Long saleId, Long cancelledByUserId, String reason) {
         Sale sale = saleRepository.findById(saleId)
                 .orElseThrow(() -> new RuntimeException("Sale not found"));
 
-        // Already cancelled
         if (sale.getStatus() == Sale.SaleStatus.CANCELLED) {
             throw new RuntimeException("Sale is already cancelled");
         }
 
-        // Same day only check
-        if (!sale.getDate().toLocalDate().equals(java.time.LocalDate.now())) {
-            throw new RuntimeException("Sale can only be cancelled on the same day it was made");
+        if (!sale.getDate().toLocalDate().equals(LocalDate.now())) {
+            throw new RuntimeException(
+                    "Sale can only be cancelled on the same day it was made");
         }
 
         User cancelledBy = userRepository.findById(cancelledByUserId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Restore stock for each item
-        List<Product> updatedProducts = new ArrayList<>();
+        // Get main location for stock restoration
+        StockLocation mainLocation = stockLocationRepository
+                .findByShopIdAndIsMainTrue(sale.getShop().getId())
+                .orElse(null);
+
         List<StockMovement> movements = new ArrayList<>();
 
         for (SaleItem item : sale.getItems()) {
             Product product = item.getProduct();
-            product.setQuantity(product.getQuantity() + item.getQuantity());
-            updatedProducts.add(product);
 
-            // Record stock movement IN for the return
+            if (mainLocation != null) {
+                ProductStock productStock = productStockRepository
+                        .findByProductIdAndLocationId(
+                                product.getId(), mainLocation.getId())
+                        .orElseGet(() -> {
+                            ProductStock ps = new ProductStock();
+                            ps.setProduct(product);
+                            ps.setLocation(mainLocation);
+                            ps.setQuantity(0);
+                            return ps;
+                        });
+                productStock.setQuantity(
+                        productStock.getQuantity() + item.getQuantity());
+                productStockRepository.save(productStock);
+
+                // Sync products.quantity
+                Integer total = productStockRepository
+                        .getTotalQuantityByProductId(product.getId());
+                product.setQuantity(total != null ? total
+                        : product.getQuantity() + item.getQuantity());
+            } else {
+                product.setQuantity(product.getQuantity() + item.getQuantity());
+            }
+
+            productRepository.save(product);
+
+            // Record stock movement IN for return
             StockMovement movement = new StockMovement();
             movement.setShop(sale.getShop());
             movement.setProduct(product);
@@ -193,10 +262,8 @@ public class SaleService {
             movements.add(movement);
         }
 
-        productRepository.saveAll(updatedProducts);
         stockMovementRepository.saveAll(movements);
 
-        // Mark as cancelled
         sale.setStatus(Sale.SaleStatus.CANCELLED);
         sale.setCancelledBy(cancelledBy);
         sale.setCancelledAt(LocalDateTime.now());
@@ -219,21 +286,5 @@ public class SaleService {
                 : saleRepository.findByIdsWithDetails(ids);
 
         return new PageImpl<>(salesWithDetails, pageable, salesPage.getTotalElements());
-    }
-
-
-    public List<Map<String, Object>> getCashDeskReport(Long shopId, LocalDateTime start, LocalDateTime end) {
-        List<Object[]> raw = saleRepository.getCashDeskReport(shopId, start, end);
-        return raw.stream().map(row -> {
-            Map<String, Object> item = new java.util.LinkedHashMap<>();
-            item.put("userId", row[0]);
-            item.put("userName", row[1]);
-            item.put("salesCount", row[2]);
-            item.put("totalRevenue", row[3]);
-            item.put("cashAmount", row[4]);
-            item.put("momoAmount", row[5]);
-            item.put("bankAmount", row[6]);
-            return item;
-        }).collect(java.util.stream.Collectors.toList());
     }
 }
