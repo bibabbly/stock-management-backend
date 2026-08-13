@@ -91,7 +91,31 @@ public class SaleService {
             double unitPrice = product.getSellingPrice();
             double subtotal = unitPrice * qty;
 
-            // Calculate discount
+            // ── STOCK VALIDATION ──
+            if (mainLocation != null) {
+                // Validate against main location stock only
+                ProductStock mainStock = productStockRepository
+                        .findByProductIdAndLocationId(
+                                product.getId(), mainLocation.getId())
+                        .orElse(null);
+                int availableInMain = mainStock != null ? mainStock.getQuantity() : 0;
+                if (availableInMain < qty) {
+                    throw new RuntimeException(
+                            "Insufficient stock in main location for: " + product.getName() +
+                                    ". Available: " + availableInMain + ", Requested: " + qty
+                    );
+                }
+            } else {
+                // Fallback — single location, check total quantity
+                if (product.getQuantity() < qty) {
+                    throw new RuntimeException(
+                            "Insufficient stock for: " + product.getName() +
+                                    ". Available: " + product.getQuantity() + ", Requested: " + qty
+                    );
+                }
+            }
+
+            // ── CALCULATE DISCOUNT ──
             double itemDiscountAmount = 0;
             String discountType = null;
             Double discountValue = null;
@@ -112,10 +136,11 @@ public class SaleService {
             originalAmount += subtotal;
             discountAmount += itemDiscountAmount;
 
-            // Deduct from product_stock main location if available
+            // ── DEDUCT FROM MAIN LOCATION ──
             if (mainLocation != null) {
                 ProductStock productStock = productStockRepository
-                        .findByProductIdAndLocationId(product.getId(), mainLocation.getId())
+                        .findByProductIdAndLocationId(
+                                product.getId(), mainLocation.getId())
                         .orElse(null);
 
                 if (productStock != null) {
@@ -136,7 +161,7 @@ public class SaleService {
 
             productRepository.save(product);
 
-            // Record stock movement OUT
+            // ── RECORD STOCK MOVEMENT OUT ──
             StockMovement movement = new StockMovement();
             movement.setShop(shop);
             movement.setProduct(product);
@@ -146,7 +171,7 @@ public class SaleService {
             if (user != null) movement.setUser(user);
             stockMovementRepository.save(movement);
 
-            // Build sale item
+            // ── BUILD SALE ITEM ──
             SaleItem saleItem = new SaleItem();
             saleItem.setSale(sale);
             saleItem.setProduct(product);
@@ -252,7 +277,6 @@ public class SaleService {
 
             productRepository.save(product);
 
-            // Record stock movement IN for return
             StockMovement movement = new StockMovement();
             movement.setShop(sale.getShop());
             movement.setProduct(product);
