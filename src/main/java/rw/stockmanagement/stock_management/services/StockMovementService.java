@@ -60,7 +60,8 @@ public class StockMovementService {
 
     @Transactional
     public StockMovement restockFromSupplier(Long shopId, Long productId, Long supplierId,
-                                             Integer quantity, String note, Long userId) {
+                                             Integer quantity, String note, Long userId,
+                                             Long locationId) {
         if (quantity == null || quantity <= 0) {
             throw new RuntimeException("Quantity must be greater than zero");
         }
@@ -71,19 +72,25 @@ public class StockMovementService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        // Get main location for this shop
-        StockLocation mainLocation = stockLocationRepository
-                .findByShopIdAndIsMainTrue(shopId)
-                .orElse(null);
+        // Use provided locationId, fallback to main location
+        StockLocation resolvedLocation = null;
+        if (locationId != null) {
+            resolvedLocation = stockLocationRepository.findById(locationId).orElse(null);
+        }
+        if (resolvedLocation == null) {
+            resolvedLocation = stockLocationRepository
+                    .findByShopIdAndIsMainTrue(shopId)
+                    .orElse(null);
+        }
+        final StockLocation targetLocation = resolvedLocation;
 
-        if (mainLocation != null) {
-            // Update product_stock for main location
+        if (targetLocation != null) {
             ProductStock productStock = productStockRepository
-                    .findByProductIdAndLocationId(productId, mainLocation.getId())
+                    .findByProductIdAndLocationId(productId, targetLocation.getId())
                     .orElseGet(() -> {
                         ProductStock ps = new ProductStock();
                         ps.setProduct(product);
-                        ps.setLocation(mainLocation);
+                        ps.setLocation(targetLocation);
                         ps.setQuantity(0);
                         return ps;
                     });
@@ -94,7 +101,7 @@ public class StockMovementService {
             Integer total = productStockRepository.getTotalQuantityByProductId(productId);
             product.setQuantity(total != null ? total : 0);
         } else {
-            // Fallback — no location found, update products.quantity directly
+            // Fallback — no location found
             product.setQuantity(product.getQuantity() + quantity);
         }
 
@@ -162,7 +169,6 @@ public class StockMovementService {
             Integer total = productStockRepository.getTotalQuantityByProductId(productId);
             product.setQuantity(total != null ? total : 0);
         } else {
-            // Fallback
             product.setQuantity(Math.max(0, product.getQuantity() - quantity));
         }
 
