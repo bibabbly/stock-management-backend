@@ -72,7 +72,7 @@ public class StockMovementService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        // Use provided locationId, fallback to main location
+        // Use provided locationId or fallback to main location
         StockLocation resolvedLocation = null;
         if (locationId != null) {
             resolvedLocation = stockLocationRepository.findById(locationId).orElse(null);
@@ -97,17 +97,14 @@ public class StockMovementService {
             productStock.setQuantity(productStock.getQuantity() + quantity);
             productStockRepository.save(productStock);
 
-            // Sync products.quantity with total across all locations
             Integer total = productStockRepository.getTotalQuantityByProductId(productId);
             product.setQuantity(total != null ? total : 0);
         } else {
-            // Fallback — no location found
             product.setQuantity(product.getQuantity() + quantity);
         }
 
         productRepository.save(product);
 
-        // Record stock movement
         StockMovement movement = new StockMovement();
         movement.setShop(shop);
         movement.setProduct(product);
@@ -124,11 +121,10 @@ public class StockMovementService {
 
     @Transactional
     public StockMovement manualStockOut(Long shopId, Long productId, Integer quantity,
-                                        String reason, Long userId) {
+                                        String reason, Long userId, Long locationId) {
         if (reason == null || reason.trim().isEmpty()) {
             throw new RuntimeException("Reason is mandatory for manual stock out");
         }
-
         if (quantity == null || quantity <= 0) {
             throw new RuntimeException("Quantity must be greater than zero");
         }
@@ -139,47 +135,50 @@ public class StockMovementService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
-        // Check total stock across all locations
-        Integer totalStock = productStockRepository.getTotalQuantityByProductId(productId);
-        int currentTotal = totalStock != null ? totalStock : product.getQuantity();
-
-        if (currentTotal < quantity) {
-            throw new RuntimeException(
-                    "Insufficient stock. Available: " + currentTotal);
+        // Use provided locationId or fallback to main location
+        StockLocation resolvedLocation = null;
+        if (locationId != null) {
+            resolvedLocation = stockLocationRepository.findById(locationId).orElse(null);
         }
+        if (resolvedLocation == null) {
+            resolvedLocation = stockLocationRepository
+                    .findByShopIdAndIsMainTrue(shopId)
+                    .orElse(null);
+        }
+        final StockLocation targetLocation = resolvedLocation;
 
-        // Deduct from main location first
-        StockLocation mainLocation = stockLocationRepository
-                .findByShopIdAndIsMainTrue(shopId)
-                .orElse(null);
-
-        if (mainLocation != null) {
+        if (targetLocation != null) {
             ProductStock productStock = productStockRepository
-                    .findByProductIdAndLocationId(productId, mainLocation.getId())
+                    .findByProductIdAndLocationId(productId, targetLocation.getId())
                     .orElse(null);
 
+            int available = productStock != null ? productStock.getQuantity() : 0;
+            if (available < quantity) {
+                throw new RuntimeException(
+                        "Insufficient stock in selected location. Available: " + available);
+            }
+
             if (productStock != null) {
-                int newQty = productStock.getQuantity() - quantity;
-                if (newQty < 0) newQty = 0;
-                productStock.setQuantity(newQty);
+                productStock.setQuantity(Math.max(0, productStock.getQuantity() - quantity));
                 productStockRepository.save(productStock);
             }
 
-            // Sync products.quantity
             Integer total = productStockRepository.getTotalQuantityByProductId(productId);
             product.setQuantity(total != null ? total : 0);
         } else {
+            if (product.getQuantity() < quantity) {
+                throw new RuntimeException(
+                        "Insufficient stock. Available: " + product.getQuantity());
+            }
             product.setQuantity(Math.max(0, product.getQuantity() - quantity));
         }
 
-        // Auto deactivate if total stock reaches 0
         if (product.getQuantity() == 0) {
             product.setActive(false);
         }
 
         productRepository.save(product);
 
-        // Record stock movement
         StockMovement movement = new StockMovement();
         movement.setShop(shop);
         movement.setProduct(product);

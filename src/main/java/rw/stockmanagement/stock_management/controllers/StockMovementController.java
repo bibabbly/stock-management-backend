@@ -1,7 +1,6 @@
 package rw.stockmanagement.stock_management.controllers;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import rw.stockmanagement.stock_management.models.StockMovement;
@@ -71,9 +70,11 @@ public class StockMovementController {
             String reason = body.get("reason").toString();
             Long userId = body.get("userId") != null
                     ? Long.valueOf(body.get("userId").toString()) : null;
+            Long locationId = body.get("locationId") != null
+                    ? Long.valueOf(body.get("locationId").toString()) : null;
 
             StockMovement movement = stockMovementService.manualStockOut(
-                    shopId, productId, quantity, reason, userId);
+                    shopId, productId, quantity, reason, userId, locationId);
             return ResponseEntity.ok(movement);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
