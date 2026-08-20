@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import rw.stockmanagement.stock_management.models.*;
 import rw.stockmanagement.stock_management.repositories.*;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -110,8 +111,9 @@ public class StockTransferService {
         });
     }
 
-    public Page<StockTransfer> getTransfers(Long shopId, int page, int size) {
-        return stockTransferRepository.findByShopIdOrderByCreatedAtDesc(
-                shopId, PageRequest.of(page, size));
+    public Page<StockTransfer> getTransfers(Long shopId, int page, int size,
+                                            String search, LocalDateTime startDate, LocalDateTime endDate) {
+        return stockTransferRepository.search(
+                shopId, search, startDate, endDate, PageRequest.of(page, size));
     }
 }

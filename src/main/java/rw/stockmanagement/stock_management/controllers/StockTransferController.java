@@ -6,6 +6,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import rw.stockmanagement.stock_management.models.StockTransfer;
 import rw.stockmanagement.stock_management.services.StockTransferService;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Map;
 
 @RestController
@@ -20,8 +23,18 @@ public class StockTransferController {
     public ResponseEntity<Page<StockTransfer>> getTransfers(
             @PathVariable Long shopId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(stockTransferService.getTransfers(shopId, page, size));
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+
+        LocalDateTime start = (startDate != null && !startDate.isBlank())
+                ? LocalDate.parse(startDate).atStartOfDay() : null;
+        LocalDateTime end = (endDate != null && !endDate.isBlank())
+                ? LocalDate.parse(endDate).atTime(LocalTime.MAX) : null;
+
+        return ResponseEntity.ok(
+                stockTransferService.getTransfers(shopId, page, size, search, start, end));
     }
 
     @PostMapping
