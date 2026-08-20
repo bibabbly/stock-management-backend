@@ -32,6 +32,33 @@ public class StockTransferService {
             throw new RuntimeException("Quantity must be greater than zero");
         }
 
+        if (userId == null) {
+            throw new RuntimeException("User is required to perform a stock transfer");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        StockLocation fromLocationEntity = stockLocationRepository.findById(fromLocationId)
+                .orElseThrow(() -> new RuntimeException("Source location not found"));
+        StockLocation toLocationEntity = stockLocationRepository.findById(toLocationId)
+                .orElseThrow(() -> new RuntimeException("Destination location not found"));
+
+        // Direction rule:
+        // ADMIN can only move Main -> Warehouse.
+        // Non-admin (STOCK_TRANSFER permission) can only move Warehouse -> Main.
+        boolean isAdmin = user.getRole() == User.Role.ADMIN;
+
+        if (isAdmin) {
+            if (!Boolean.TRUE.equals(fromLocationEntity.getIsMain()) || Boolean.TRUE.equals(toLocationEntity.getIsMain())) {
+                throw new RuntimeException("Admins can only transfer stock from Main to Warehouse");
+            }
+        } else {
+            if (Boolean.TRUE.equals(fromLocationEntity.getIsMain()) || !Boolean.TRUE.equals(toLocationEntity.getIsMain())) {
+                throw new RuntimeException("You can only transfer stock from Warehouse to Main");
+            }
+        }
+
         // Get source stock — check availability
         ProductStock fromStock = productStockRepository
                 .findByProductIdAndLocationId(productId, fromLocationId)
@@ -49,8 +76,7 @@ public class StockTransferService {
                     ProductStock ps = new ProductStock();
                     ps.setProduct(productRepository.findById(productId)
                             .orElseThrow(() -> new RuntimeException("Product not found")));
-                    ps.setLocation(stockLocationRepository.findById(toLocationId)
-                            .orElseThrow(() -> new RuntimeException("Destination location not found")));
+                    ps.setLocation(toLocationEntity);
                     ps.setQuantity(0);
                     return ps;
                 });
@@ -74,10 +100,7 @@ public class StockTransferService {
         transfer.setToLocation(toStock.getLocation());
         transfer.setQuantity(quantity);
         transfer.setNote(note);
-
-        if (userId != null) {
-            userRepository.findById(userId).ifPresent(transfer::setUser);
-        }
+        transfer.setUser(user);
 
         return stockTransferRepository.save(transfer);
     }

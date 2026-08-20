@@ -33,8 +33,11 @@ public class StockTransferController {
             Long toLocationId = Long.valueOf(body.get("toLocationId").toString());
             Integer quantity = Integer.valueOf(body.get("quantity").toString());
             String note = body.get("note") != null ? body.get("note").toString() : "";
-            Long userId = body.get("userId") != null
-                    ? Long.valueOf(body.get("userId").toString()) : null;
+
+            if (body.get("userId") == null) {
+                return ResponseEntity.badRequest().body(Map.of("message", "userId is required"));
+            }
+            Long userId = Long.valueOf(body.get("userId").toString());
 
             StockTransfer transfer = stockTransferService.transfer(
                     shopId, productId, fromLocationId, toLocationId, quantity, note, userId);
