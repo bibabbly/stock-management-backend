@@ -45,15 +45,11 @@ public class StockTransferService {
                 .orElseThrow(() -> new RuntimeException("Destination location not found"));
 
         // Direction rule:
-        // ADMIN can only move Main -> Warehouse.
+        // ADMIN can transfer between any locations (full access).
         // Non-admin (STOCK_TRANSFER permission) can only move Warehouse -> Main.
         boolean isAdmin = user.getRole() == User.Role.ADMIN;
 
-        if (isAdmin) {
-            if (!Boolean.TRUE.equals(fromLocationEntity.getIsMain()) || Boolean.TRUE.equals(toLocationEntity.getIsMain())) {
-                throw new RuntimeException("Admins can only transfer stock from Main to Warehouse");
-            }
-        } else {
+        if (!isAdmin) {
             if (Boolean.TRUE.equals(fromLocationEntity.getIsMain()) || !Boolean.TRUE.equals(toLocationEntity.getIsMain())) {
                 throw new RuntimeException("You can only transfer stock from Warehouse to Main");
             }
