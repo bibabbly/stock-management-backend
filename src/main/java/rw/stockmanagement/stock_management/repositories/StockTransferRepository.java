@@ -15,8 +15,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
 
     @Query("SELECT t FROM StockTransfer t WHERE t.shop.id = :shopId " +
             "AND (:search IS NULL OR :search = '' OR LOWER(t.product.name) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-            "AND (:startDate IS NULL OR t.createdAt >= :startDate) " +
-            "AND (:endDate IS NULL OR t.createdAt <= :endDate) " +
+            "AND t.createdAt >= :startDate " +
+            "AND t.createdAt <= :endDate " +
             "ORDER BY t.createdAt DESC")
     Page<StockTransfer> search(@Param("shopId") Long shopId,
                                @Param("search") String search,

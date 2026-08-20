@@ -113,7 +113,13 @@ public class StockTransferService {
 
     public Page<StockTransfer> getTransfers(Long shopId, int page, int size,
                                             String search, LocalDateTime startDate, LocalDateTime endDate) {
+        // Default to a wide sentinel range instead of passing null — Postgres/Hibernate
+        // can't reliably infer the bind parameter's type when it's only ever compared
+        // against IS NULL, which was causing "could not determine data type of parameter" errors.
+        LocalDateTime effectiveStart = startDate != null ? startDate : LocalDateTime.of(2000, 1, 1, 0, 0);
+        LocalDateTime effectiveEnd = endDate != null ? endDate : LocalDateTime.now().plusYears(1);
+
         return stockTransferRepository.search(
-                shopId, search, startDate, endDate, PageRequest.of(page, size));
+                shopId, search, effectiveStart, effectiveEnd, PageRequest.of(page, size));
     }
 }
