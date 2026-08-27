@@ -4,8 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import rw.stockmanagement.stock_management.models.Product;
+import rw.stockmanagement.stock_management.models.ProductStock;
 import rw.stockmanagement.stock_management.models.Sale;
 import rw.stockmanagement.stock_management.models.Shop;
+import rw.stockmanagement.stock_management.models.StockTransfer;
 import rw.stockmanagement.stock_management.repositories.*;
 
 import java.io.OutputStream;
@@ -25,6 +27,8 @@ public class DailyReportService {
     private final SaleRepository saleRepository;
     private final ProductRepository productRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final StockTransferRepository stockTransferRepository;
+    private final ProductStockRepository productStockRepository;
     private final ShopRepository shopRepository;
 
     @Scheduled(cron = "0 0 4 * * *", zone = "UTC") // 6AM Rwanda time
@@ -82,7 +86,27 @@ public class DailyReportService {
                 .filter(m -> m.getType().name().equals("OUT"))
                 .mapToLong(m -> m.getQuantity()).sum();
 
-        String html = buildHtml(shop.getName(), dateStr, sales.size(), revenue, profit, topProducts, lowStock, stockIn, stockOut);
+        // Stock transfers that happened yesterday
+        List<StockTransfer> transfers = stockTransferRepository.findByShopId(shopId).stream()
+                .filter(t -> !t.getCreatedAt().isBefore(start) && !t.getCreatedAt().isAfter(end))
+                .sorted(Comparator.comparing(StockTransfer::getCreatedAt).reversed())
+                .collect(Collectors.toList());
+
+        // Current stock balance per location (only meaningful for multi-location shops)
+        List<ProductStock> shopStock = productStockRepository.findByShopId(shopId);
+        Map<String, long[]> balanceByLocation = new LinkedHashMap<>(); // name -> [totalUnits, distinctProductsWithStock]
+        Map<String, Set<Long>> productsByLocation = new HashMap<>();
+        for (ProductStock ps : shopStock) {
+            if (ps.getQuantity() == null || ps.getQuantity() <= 0) continue;
+            String locName = ps.getLocation().getName();
+            balanceByLocation.computeIfAbsent(locName, k -> new long[2]);
+            balanceByLocation.get(locName)[0] += ps.getQuantity();
+            productsByLocation.computeIfAbsent(locName, k -> new HashSet<>()).add(ps.getProduct().getId());
+        }
+        balanceByLocation.forEach((loc, arr) -> arr[1] = productsByLocation.get(loc).size());
+
+        String html = buildHtml(shop.getName(), dateStr, sales.size(), revenue, profit, topProducts,
+                lowStock, stockIn, stockOut, transfers, balanceByLocation);
 
         String recipientEmail = shop.getOwnerEmail();
         if (recipientEmail == null || recipientEmail.isEmpty()) {
@@ -119,7 +143,6 @@ public class DailyReportService {
             conn.setRequestProperty("api-key", apiKey);
             conn.setDoOutput(true);
 
-            // Build CC part only if different from recipient
             String ccPart = "";
             if (ccEmail != null && !ccEmail.equalsIgnoreCase(toEmail)) {
                 ccPart = ",\"cc\":[{\"email\":\"" + ccEmail + "\"}]";
@@ -148,7 +171,8 @@ public class DailyReportService {
 
     private String buildHtml(String shopName, String date, int salesCount, double revenue, double profit,
                              List<Map.Entry<String, Integer>> topProducts,
-                             List<Product> lowStock, long stockIn, long stockOut) {
+                             List<Product> lowStock, long stockIn, long stockOut,
+                             List<StockTransfer> transfers, Map<String, long[]> balanceByLocation) {
 
         StringBuilder topProductsHtml = new StringBuilder();
         if (topProducts.isEmpty()) {
@@ -179,6 +203,52 @@ public class DailyReportService {
             }
         }
 
+        // Stock Transfers section
+        StringBuilder transfersHtml = new StringBuilder();
+        if (transfers.isEmpty()) {
+            transfersHtml.append("<p style='color:#94a3b8;font-size:13px;'>No stock transfers yesterday.</p>");
+        } else {
+            DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("h:mm a");
+            for (StockTransfer t : transfers) {
+                transfersHtml.append(String.format(
+                        "<div style='padding:10px 0;border-bottom:1px solid #f1f5f9;'>" +
+                                "<div style='display:flex;justify-content:space-between;align-items:center;'>" +
+                                "<span style='color:#0f172a;font-size:13px;font-weight:600;'>%s</span>" +
+                                "<span style='color:#94a3b8;font-size:11px;'>%s</span>" +
+                                "</div>" +
+                                "<div style='display:flex;align-items:center;gap:8px;margin-top:4px;'>" +
+                                "<span style='background:#fef2f2;color:#ef4444;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;'>%s</span>" +
+                                "<span style='color:#cbd5e1;'>→</span>" +
+                                "<span style='background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;'>%s</span>" +
+                                "<span style='color:#3b82f6;font-weight:700;font-size:13px;margin-left:auto;'>%d units</span>" +
+                                "</div>" +
+                                "</div>",
+                        t.getProduct().getName(),
+                        t.getCreatedAt().format(timeFmt),
+                        t.getFromLocation().getName(),
+                        t.getToLocation().getName(),
+                        t.getQuantity()
+                ));
+            }
+        }
+
+        // Stock Balance section — only for shops with more than one location
+        StringBuilder balanceHtml = new StringBuilder();
+        boolean showBalance = balanceByLocation.size() > 1;
+        if (showBalance) {
+            for (Map.Entry<String, long[]> entry : balanceByLocation.entrySet()) {
+                balanceHtml.append(String.format(
+                        "<div style='display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;'>" +
+                                "<span style='color:#0f172a;font-size:13px;font-weight:600;'>%s</span>" +
+                                "<span style='color:#64748b;font-size:13px;'>%,d units across %d products</span>" +
+                                "</div>",
+                        entry.getKey(), entry.getValue()[0], entry.getValue()[1]
+                ));
+            }
+        }
+
+        String transferCount = String.valueOf(transfers.size());
+
         return "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;'>" +
                 "<div style='max-width:600px;margin:20px auto;background:white;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;'>" +
                 "<div style='background:linear-gradient(135deg,#3b82f6,#06b6d4);padding:30px;text-align:center;'>" +
@@ -187,20 +257,28 @@ public class DailyReportService {
                 "<p style='color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px;'>" + date + "</p>" +
                 "</div>" +
                 "<div style='padding:24px;'>" +
-                "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;'>" +
-                "<div style='background:#f0fdf4;border-radius:12px;padding:16px;text-align:center;'>" +
+
+                // Summary cards — Sales, Revenue, Profit, Transfers
+                "<div style='margin-bottom:24px;'>" +
+                "<div style='background:#f0fdf4;border-radius:12px;padding:16px;text-align:center;margin-bottom:8px;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Sales</p>" +
                 "<p style='color:#16a34a;font-size:24px;font-weight:700;margin:0;'>" + salesCount + "</p>" +
                 "</div>" +
-                "<div style='background:#eff6ff;border-radius:12px;padding:16px;text-align:center;'>" +
+                "<div style='background:#eff6ff;border-radius:12px;padding:16px;text-align:center;margin-bottom:8px;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Revenue</p>" +
                 "<p style='color:#3b82f6;font-size:18px;font-weight:700;margin:0;'>RWF " + String.format("%,.0f", revenue) + "</p>" +
                 "</div>" +
-                "<div style='background:" + (profit >= 0 ? "#f0fdf4" : "#fef2f2") + ";border-radius:12px;padding:16px;text-align:center;'>" +
+                "<div style='background:" + (profit >= 0 ? "#f0fdf4" : "#fef2f2") + ";border-radius:12px;padding:16px;text-align:center;margin-bottom:8px;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Profit</p>" +
                 "<p style='color:" + (profit >= 0 ? "#16a34a" : "#ef4444") + ";font-size:18px;font-weight:700;margin:0;'>RWF " + String.format("%,.0f", profit) + "</p>" +
                 "</div>" +
+                "<div style='background:#f5f3ff;border-radius:12px;padding:16px;text-align:center;'>" +
+                "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Stock Transfers</p>" +
+                "<p style='color:#7c3aed;font-size:24px;font-weight:700;margin:0;'>" + transferCount + "</p>" +
                 "</div>" +
+                "</div>" +
+
+                // Stock IN/OUT strip
                 "<div style='background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:24px;display:flex;justify-content:space-around;'>" +
                 "<div style='text-align:center;'>" +
                 "<p style='color:#94a3b8;font-size:11px;margin:0 0 4px;text-transform:uppercase;'>Stock IN</p>" +
@@ -211,6 +289,21 @@ public class DailyReportService {
                 "<p style='color:#ef4444;font-size:20px;font-weight:700;margin:0;'>-" + stockOut + "</p>" +
                 "</div>" +
                 "</div>" +
+
+                // Stock Transfers section
+                "<div style='margin-bottom:24px;'>" +
+                "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>Stock Transfers (Yesterday)</h3>" +
+                transfersHtml +
+                "</div>" +
+
+                // Stock Balance section (only multi-location shops)
+                (showBalance ?
+                        "<div style='margin-bottom:24px;'>" +
+                                "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>Current Stock Balance</h3>" +
+                                balanceHtml +
+                                "</div>"
+                        : "") +
+
                 "<div style='margin-bottom:24px;'>" +
                 "<h3 style='color:#0f172a;font-size:15px;margin:0 0 12px;'>Top Selling Products</h3>" +
                 topProductsHtml +
