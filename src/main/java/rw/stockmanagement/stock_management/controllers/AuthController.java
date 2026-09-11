@@ -37,7 +37,7 @@ public class AuthController {
 
         // Check if shop is disabled
         if (user.getShop() != null && !user.getShop().isActive()) {
-            return ResponseEntity.status(403).body("Your subscription has expired. Please contact INNOTEWO INC LTD to renew.");
+            return ResponseEntity.status(403).body("Your subscription has expired. Please contact FieldSync Vantage to renew.");
         }
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());

@@ -314,7 +314,8 @@ public class DailyReportService {
                 "</div>" +
                 "</div>" +
                 "<div style='background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;'>" +
-                "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by INNOTEWO INC LTD - Kigali, Rwanda</p>" +
+                "<img src='https://app.innotewo.com/fieldsync-vantage-logo-email-300w.png' alt='FieldSync Vantage' style='height:28px;margin-bottom:6px;'/>" +
+                "<p style='color:#94a3b8;font-size:12px;margin:0;'>BizTrack by FieldSync Vantage - Kigali, Rwanda</p>" +
                 "</div>" +
                 "</div></body></html>";
     }
